@@ -174,15 +174,7 @@ To run this project, you will need to add the following environment variables to
 Clone the project
 
 ```bash
-  git clone https://github.com/bayesianinstitute/GPT-Clone.git
-```
-
-### Checkout Branch
-
-#### For ChatBayes code
-
-```bash
-   git checkout Free_Tier
+  git clone https://github.com/bayesianinstitute/resume_engine.git
 ```
 
 ##To Start BackEnd
@@ -190,7 +182,7 @@ Clone the project
 Go to the server directory
 
 ```bash
-  cd ChatGPT/server
+  cd server
 ```
 
 Install dependencies
@@ -210,7 +202,7 @@ Start
 #### Go to the client directory
 
 ```bash
-  cd ChatGPT/client
+  cd resume
 ```
 
 #### Install dependencies
@@ -236,13 +228,3 @@ Start
 ```bash
    npm run preview
 ```
-
-## Technology Used
-
-#vite #reactjs #scss #redux-toolkit
-
-#nodejs #expressjs #mongodb #jsonwebtoken authentication
-
-#javascript
-
-#openai #chatgpt
