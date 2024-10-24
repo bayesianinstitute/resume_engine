@@ -1,15 +1,18 @@
 import express from 'express';
 import multer from 'multer';
-import { matcher } from '../controllers/resume.js';
+import { matcher,stats,getResumeAnalysis,getSkillProgresses } from '../controllers/resume.js';
 import { getLinkedInJobs } from '../controllers/linkedinController.js';
 import { generatePreparationResources } from '../controllers/interviewController.js';
 import { getJobs, createJob, updateJobStatus,deleteJob } from '../controllers/jobTrackerController.js';
-import { verifyTokenMiddleware } from '../middleware/auth.js'; // Import middleware
+import { verifyTokenMiddleware } from '../middleware/auth.js'; 
 
 const router = express.Router();
 const upload = multer();
 
 router.post('/matcher', upload.single('resume'), matcher);
+router.post('/stats', upload.single('resume'), stats);
+router.post('/resumeanalysis', getResumeAnalysis);
+router.post('/resumeskills', getSkillProgresses);
 router.post('/scrape', getLinkedInJobs);
 router.post('/preparation', generatePreparationResources);
 
