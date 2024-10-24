@@ -1,17 +1,12 @@
-import OpenAI from "openai";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { Document } from "@langchain/core/documents";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
+import { genAIModel, openai } from "../utils/chatAI.js";
 
-// Initialize OpenAI with API key
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+import { Job } from "../models/job.js";
 
 export const matcher = async (req, res) => {
   const jobDescription = req.body.jobDescription;
@@ -19,7 +14,9 @@ export const matcher = async (req, res) => {
   const fitThreshold = 70; // Define threshold here
 
   if (!resumeFile || !jobDescription) {
-    return res.status(400).json({ error: 'Resume file and job description are required.' });
+    return res
+      .status(400)
+      .json({ error: "Resume file and job description are required." });
   }
 
   const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-resume.pdf`);
@@ -29,10 +26,14 @@ export const matcher = async (req, res) => {
 
     const pdfLoader = new PDFLoader(tempFilePath);
     const resumeDocs = await pdfLoader.load();
-    const resumeText = resumeDocs.map(doc => doc.pageContent).join(" ");
+    const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
     // Pass fitThreshold to getLLMEvaluation
-    const { evaluationText, score } = await getLLMEvaluation(resumeText, jobDescription, fitThreshold);
+    const { evaluationText, score } = await getLLMEvaluation(
+      resumeText,
+      jobDescription,
+      fitThreshold
+    );
 
     let resultMessage;
     if (score !== null && score >= fitThreshold) {
@@ -43,12 +44,13 @@ export const matcher = async (req, res) => {
 
     res.json({
       matchResult: resultMessage,
-      evaluationResponse: evaluationText
+      evaluationResponse: evaluationText,
     });
-
   } catch (error) {
-    console.error('Error processing resume match:', error);
-    res.status(500).json({ error: 'An error occurred while processing the resume match.' });
+    console.error("Error processing resume match:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while processing the resume match." });
   } finally {
     fs.unlinkSync(tempFilePath);
   }
@@ -56,10 +58,10 @@ export const matcher = async (req, res) => {
 
 export const stats = async (req, res) => {
   const resumeFile = req.file;
-  const { userId } = req.body;  // Assuming userId is passed in the request body
+  const { userId } = req.body; // Assuming userId is passed in the request body
 
   if (!resumeFile) {
-    return res.status(400).json({ error: 'Resume file is required.' });
+    return res.status(400).json({ error: "Resume file is required." });
   }
 
   const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-resume.pdf`);
@@ -71,10 +73,11 @@ export const stats = async (req, res) => {
     // Load and extract text from the resume PDF
     const pdfLoader = new PDFLoader(tempFilePath);
     const resumeDocs = await pdfLoader.load();
-    const resumeText = resumeDocs.map(doc => doc.pageContent).join(" ");
+    const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
     // Get LLM evaluation results (strengths, weaknesses, skills)
-    const { evaluationText, strengths, weaknesses, skills } = await getLLMEvaluationStats(resumeText);
+    const { evaluationText, strengths, weaknesses, skills } =
+      await getLLMEvaluationStats(resumeText);
 
     // Check if a resume analysis record exists for the user
     let resumeAnalysis = await ResumeAnalysis.findOne({ userId });
@@ -83,7 +86,7 @@ export const stats = async (req, res) => {
       // Update the existing resume analysis record
       resumeAnalysis.strengths = strengths;
       resumeAnalysis.weaknesses = weaknesses;
-      resumeAnalysis.evaluatedAt = new Date();  // Update the evaluation date
+      resumeAnalysis.evaluatedAt = new Date(); // Update the evaluation date
     } else {
       // Create a new resume analysis record if not found
       resumeAnalysis = new ResumeAnalysis({
@@ -93,72 +96,71 @@ export const stats = async (req, res) => {
       });
     }
 
-    await resumeAnalysis.save();  // Save the updated or new record
+    await resumeAnalysis.save(); // Save the updated or new record
 
     // Check if skill progress record exists for the user
     let skillProgress = await SkillProgress.findOne({ userId });
 
     if (skillProgress) {
       // Update the existing skill progress record
-      skillProgress.skills = skills.map(skill => ({
+      skillProgress.skills = skills.map((skill) => ({
         skillName: skill.skillName,
         skillLevel: skill.skillLevel,
       }));
-      skillProgress.evaluatedAt = new Date();  // Update the evaluation date
+      skillProgress.evaluatedAt = new Date(); // Update the evaluation date
     } else {
       // Create a new skill progress record if not found
       skillProgress = new SkillProgress({
         userId,
-        skills: skills.map(skill => ({
+        skills: skills.map((skill) => ({
           skillName: skill.skillName,
           skillLevel: skill.skillLevel,
         })),
       });
     }
 
-    await skillProgress.save();  // Save the updated or new record
+    await skillProgress.save(); // Save the updated or new record
 
     // Send response back to the client
     res.json({
       success: true,
-      message: 'Resume analysis and skill progress data saved successfully!',
+      message: "Resume analysis and skill progress data saved successfully!",
       data: {
         resumeAnalysis: {
           strengths,
           weaknesses,
         },
-        skillProgress: skills
-      }
+        skillProgress: skills,
+      },
     });
-
   } catch (error) {
-    console.error('Error processing resume:', error);
-    res.status(500).json({ error: 'An error occurred while processing the resume.' });
+    console.error("Error processing resume:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while processing the resume." });
   } finally {
     // Remove the temporary resume file after processing
     fs.unlinkSync(tempFilePath);
   }
 };
 
-
-
-
-
 // Helper function to get embeddings for text chunks
 async function getEmbeddingsForChunks(chunks) {
   try {
     const embeddingsResponses = await Promise.all(
-      chunks.map(chunk => openai.embeddings.create({ model: 'text-embedding-ada-002', input: chunk }))
+      chunks.map((chunk) =>
+        openai.embeddings.create({
+          model: "text-embedding-ada-002",
+          input: chunk,
+        })
+      )
     );
-    return embeddingsResponses.map(response => response.data[0].embedding);
+    return embeddingsResponses.map((response) => response.data[0].embedding);
   } catch (error) {
-    console.error('Error fetching embeddings:', error);
-    throw new Error('Failed to fetch embeddings');
+    console.error("Error fetching embeddings:", error);
+    throw new Error("Failed to fetch embeddings");
   }
 }
-
-
-
 
 async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   const prompt = `
@@ -190,25 +192,27 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
     - One recommendation if applicable
   `;
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 200,
-      temperature: 0.5, // Lower temperature for more concise and deterministic output
+    const chatSession = genAIModel.startChat({
+      history: [],
     });
-    
-    const response = completion.choices[0].message.content.trim();
+
+    const result = await chatSession.sendMessage(prompt);
+
+    const response = result.response.text();
+
     const scoreMatch = response.match(/Composite Score:\s*(\d+)/i);
     const score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
-    
+
     return { evaluationText: response, score };
   } catch (error) {
-    console.error('Error fetching LLM evaluation:', error);
-    return { evaluationText: "Evaluation and improvement suggestions are not available.", score: null };
+    console.error("Error fetching LLM evaluation:", error);
+    return {
+      evaluationText:
+        "Evaluation and improvement suggestions are not available.",
+      score: null,
+    };
   }
 }
-
-
 
 export async function getLLMEvaluationStats(resumeText) {
   const prompt = `
@@ -239,24 +243,31 @@ export async function getLLMEvaluationStats(resumeText) {
     - Weaknesses: Limited experience in SQL.
     - Skills and Proficiency: Python: 85, React: 70, SQL: 60, Machine Learning: 55
   `;
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1000,
-      temperature: 0.5, // Lower temperature for more structured and concise response
+    const chatSession = genAIModel.startChat({
+      history: [],
     });
 
-    const response = completion.choices[0].message.content.trim();
+    const result = await chatSession.sendMessage(prompt);
+
+    const response = result.response.text();
 
     // Log raw response for debugging
-    console.log("Raw Response for Debugging:", JSON.stringify(response, null, 2));
+    console.log(
+      "Raw Response for Debugging:",
+      JSON.stringify(response, null, 2)
+    );
 
     // Updated regex to handle potential hidden spaces or line breaks
-    const strengthsMatch = response.match(/(?<=\*\*Strengths\*\*:\s*)([\s\S]+?)(?=\*\*Weaknesses\*\*:)/);
-    const weaknessesMatch = response.match(/(?<=\*\*Weaknesses\*\*:\s*)([\s\S]+?)(?=\*\*Skills and Proficiency\*\*:)/);
-    const skillsMatch = response.match(/(?<=\*\*Skills and Proficiency\*\*:\s*)([\s\S]+)/);
+    const strengthsMatch = response.match(
+      /(?<=\*\*Strengths\*\*:\s*)([\s\S]+?)(?=\*\*Weaknesses\*\*:)/
+    );
+    const weaknessesMatch = response.match(
+      /(?<=\*\*Weaknesses\*\*:\s*)([\s\S]+?)(?=\*\*Skills and Proficiency\*\*:)/
+    );
+    const skillsMatch = response.match(
+      /(?<=\*\*Skills and Proficiency\*\*:\s*)([\s\S]+)/
+    );
 
     // Log matches for debugging
     console.log("Strengths Match:", strengthsMatch);
@@ -264,26 +275,32 @@ export async function getLLMEvaluationStats(resumeText) {
     console.log("Skills Match:", skillsMatch);
 
     // Parsing strengths, weaknesses, and skills into arrays
-    const strengths = strengthsMatch && strengthsMatch[0].trim()
-      ? strengthsMatch[0].split(/\n\s*\d+\.\s*/).filter(s => s.trim()) // Split by numbers (1., 2., etc.)
-      : ['No specific strengths identified.'];
+    const strengths =
+      strengthsMatch && strengthsMatch[0].trim()
+        ? strengthsMatch[0].split(/\n\s*\d+\.\s*/).filter((s) => s.trim()) // Split by numbers (1., 2., etc.)
+        : ["No specific strengths identified."];
 
-    const weaknesses = weaknessesMatch && weaknessesMatch[0].trim()
-      ? weaknessesMatch[0].split(/\n\s*\d+\.\s*/).filter(w => w.trim()) // Split by numbers (1., 2., etc.)
-      : ['No specific weaknesses identified.'];
+    const weaknesses =
+      weaknessesMatch && weaknessesMatch[0].trim()
+        ? weaknessesMatch[0].split(/\n\s*\d+\.\s*/).filter((w) => w.trim()) // Split by numbers (1., 2., etc.)
+        : ["No specific weaknesses identified."];
 
     // Updated skills parsing
-    const skills = skillsMatch && skillsMatch[0].trim()
-      ? skillsMatch[0].split(/\n\s*\d+\.\s*/).map(skill => {
-          const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/); // Capture skill name and level
-          if (match) {
-            const skillName = match[1].trim();
-            const skillLevel = parseInt(match[2], 10);
-            return { skillName, skillLevel };
-          }
-          return null;
-        }).filter(Boolean) // Remove any null values
-      : [{ skillName: 'No skills identified', skillLevel: 0 }];
+    const skills =
+      skillsMatch && skillsMatch[0].trim()
+        ? skillsMatch[0]
+            .split(/\n\s*\d+\.\s*/)
+            .map((skill) => {
+              const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/); // Capture skill name and level
+              if (match) {
+                const skillName = match[1].trim();
+                const skillLevel = parseInt(match[2], 10);
+                return { skillName, skillLevel };
+              }
+              return null;
+            })
+            .filter(Boolean) // Remove any null values
+        : [{ skillName: "No skills identified", skillLevel: 0 }];
 
     console.log("Parsed Strengths:", strengths);
     console.log("Parsed Weaknesses:", weaknesses);
@@ -296,19 +313,18 @@ export async function getLLMEvaluationStats(resumeText) {
       skills,
     };
   } catch (error) {
-    console.error('Error fetching LLM evaluation:', error);
-    return { 
-      evaluationText: "An error occurred while processing the evaluation.", 
-      strengths: ['Unable to retrieve strengths.'],
-      weaknesses: ['Unable to retrieve weaknesses.'],
-      skills: [{ skillName: 'Error fetching skills', skillLevel: 0 }],
+    console.error("Error fetching LLM evaluation:", error);
+    return {
+      evaluationText: "An error occurred while processing the evaluation.",
+      strengths: ["Unable to retrieve strengths."],
+      weaknesses: ["Unable to retrieve weaknesses."],
+      skills: [{ skillName: "Error fetching skills", skillLevel: 0 }],
     };
   }
 }
 
-
 export const getResumeAnalysis = async (req, res) => {
-  const { userId } = req.body; 
+  const { userId } = req.body;
 
   try {
     // Find the resume analysis for the given userId
@@ -317,7 +333,7 @@ export const getResumeAnalysis = async (req, res) => {
     if (!resumeAnalysis) {
       return res.status(404).json({
         success: false,
-        message: 'Resume analysis not found for the given userId.'
+        message: "Resume analysis not found for the given userId.",
       });
     }
 
@@ -326,21 +342,20 @@ export const getResumeAnalysis = async (req, res) => {
       success: true,
       data: {
         strengths: resumeAnalysis.strengths,
-        weaknesses: resumeAnalysis.weaknesses
-      }
+        weaknesses: resumeAnalysis.weaknesses,
+      },
     });
   } catch (error) {
-    console.error('Error fetching resume analysis:', error);
+    console.error("Error fetching resume analysis:", error);
     res.status(500).json({
       success: false,
-      message: 'An error occurred while fetching the resume analysis.'
+      message: "An error occurred while fetching the resume analysis.",
     });
   }
 };
 
-
 export const getSkillProgresses = async (req, res) => {
-  const { userId } = req.body; 
+  const { userId } = req.body;
 
   try {
     // Find the skill progress for the given userId
@@ -349,7 +364,7 @@ export const getSkillProgresses = async (req, res) => {
     if (!skillProgress) {
       return res.status(404).json({
         success: false,
-        message: 'Skill progress not found for the given userId.'
+        message: "Skill progress not found for the given userId.",
       });
     }
 
@@ -359,17 +374,51 @@ export const getSkillProgresses = async (req, res) => {
       data: {
         skills: skillProgress.skills,
         evaluatedAt: skillProgress.evaluatedAt,
-      }
+      },
     });
   } catch (error) {
-    console.error('Error fetching skill progress:', error);
+    console.error("Error fetching skill progress:", error);
     res.status(500).json({
       success: false,
-      message: 'An error occurred while fetching the skill progress.'
+      message: "An error occurred while fetching the skill progress.",
     });
   }
 };
 
+export const getStatusCount = async (req, res) => {
+  try {
+    // Destructure userId from req.body
+    const { userId } = req.body;
 
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
 
+    // Aggregate job statuses by userId
+    const statusCount = await Job.aggregate([
+      { $match: { userId: userId } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]);
 
+    // Initialize status counts
+    const result = {
+      shortlist: 0,
+      applied: 0,
+      interview: 0,
+      rejected: 0,
+    };
+
+    // Populate the result with actual counts
+    statusCount.forEach((statusObj) => {
+      if (result.hasOwnProperty(statusObj._id)) {
+        result[statusObj._id] = statusObj.count;
+      }
+    });
+
+    res.json({ data: result });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error retrieving job status count", error });
+  }
+};
