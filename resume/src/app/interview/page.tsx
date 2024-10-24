@@ -53,6 +53,7 @@ export default function InterviewPreparation() {
       }
 
       const data = await response.json()
+      console.log(data)
       const prepResources: PrepResource[] = parsePreparationResources(data.preparationResources)
       
       setPrepResources(prepResources)
@@ -70,53 +71,59 @@ export default function InterviewPreparation() {
     
     let currentType: 'topic' | 'question' | 'tip' | null = null
     let buffer: string[] = []
-
+    let currentTitle: string = ''
+  
     lines.forEach(line => {
-      if (line.startsWith('- Key Skills')) {
+      if (line.startsWith('**Key Skills:**')) {
         if (buffer.length && currentType) {
           resources.push({
-            title: currentType === 'topic' ? 'Key Skills' : currentType === 'question' ? 'Interview Questions' : 'Preparation Tips',
+            title: currentTitle,
             content: buffer.join('\n'),
             type: currentType,
           })
         }
         currentType = 'topic'
+        currentTitle = 'Key Skills'
         buffer = []
-      } else if (line.startsWith('- Interview Questions')) {
+      } else if (line.startsWith('**Interview Questions:**')) {
         if (buffer.length && currentType) {
           resources.push({
-            title: currentType === 'topic' ? 'Key Skills' : currentType === 'question' ? 'Interview Questions' : 'Preparation Tips',
+            title: currentTitle,
             content: buffer.join('\n'),
             type: currentType,
           })
         }
         currentType = 'question'
+        currentTitle = 'Interview Questions'
         buffer = []
-      } else if (line.startsWith('- Preparation Tips')) {
+      } else if (line.startsWith('**Preparation Tips:**')) {
         if (buffer.length && currentType) {
           resources.push({
-            title: currentType === 'topic' ? 'Key Skills' : currentType === 'question' ? 'Interview Questions' : 'Preparation Tips',
+            title: currentTitle,
             content: buffer.join('\n'),
             type: currentType,
           })
         }
         currentType = 'tip'
+        currentTitle = 'Preparation Tips'
         buffer = []
       } else {
         buffer.push(line)
       }
     })
-
+  
+    // Push the final content if any
     if (buffer.length && currentType) {
       resources.push({
-        title: currentType === 'topic' ? 'Key Skills' : currentType === 'question' ? 'Interview Questions' : 'Preparation Tips',
+        title: currentTitle,
         content: buffer.join('\n'),
         type: currentType,
       })
     }
-
+  
     return resources
   }
+  
 
   return (
     <div className="flex min-h-screen bg-gray-50">
