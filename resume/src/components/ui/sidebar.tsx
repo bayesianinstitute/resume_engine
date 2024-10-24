@@ -1,7 +1,7 @@
 import { useRouter } from 'next/navigation';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { PieChart, Briefcase, User } from 'lucide-react';
+import { Briefcase, FileText, BarChart2, List, Upload, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
 const Sidebar = () => {
@@ -40,31 +40,35 @@ const Sidebar = () => {
         <h1 className="text-xl font-bold">Job Dashboard</h1>
       </div>
       <nav className="flex-1 px-4 py-6 space-y-4">
-        <Link href="/resume" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
+        <Link href="/dashboard" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
           <Briefcase className="w-5 h-5" />
+          <span>Dashboard</span>
+        </Link>
+        <Link href="/resume" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
+          <FileText className="w-5 h-5" />
           <span>Resume Summary</span>
         </Link>
         <Link href="/interview" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
-          <PieChart className="w-5 h-5" />
+          <BarChart2 className="w-5 h-5" />
           <span>Interview Preparation</span>
         </Link>
         <Link href="/job" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
-          <PieChart className="w-5 h-5" />
-          <span>Job list</span>
+          <List className="w-5 h-5" />
+          <span>Job List</span>
         </Link>
         <Link href="/jobtracker" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
-          <PieChart className="w-5 h-5" />
+          <BarChart2 className="w-5 h-5" />
           <span>Job Tracker</span>
         </Link>
         <Link href="/uploadResume" className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded">
-          <PieChart className="w-5 h-5" />
+          <Upload className="w-5 h-5" />
           <span>Upload Resume</span>
         </Link>
         <button 
           onClick={onLogout} 
           className="flex items-center space-x-2 text-white hover:bg-gray-700 px-4 py-2 rounded w-full text-left"
         >
-          <User className="w-5 h-5" />
+          <LogOut className="w-5 h-5" />
           <span>Logout</span>
         </button>
       </nav>
