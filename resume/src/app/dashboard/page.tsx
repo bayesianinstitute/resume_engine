@@ -5,12 +5,10 @@ import { jwtDecode } from "jwt-decode";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Sidebar from "@/components/ui/sidebar";
-import { Chart, BarController, PieController, ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend } from 'chart.js'; // Import Chart.js and required components
+import { Chart, BarController, PieController, ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend } from 'chart.js';
 
-// Register Chart.js components
 Chart.register(BarController, PieController, ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
 
-// Define the custom JWT payload type
 interface CustomJwtPayload {
   userId: string;
 }
@@ -37,13 +35,7 @@ interface ResumeStatus {
   rejected: number;
 }
 
-// Helper functions for getting and decoding token
-const getToken = () => {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("token") || "";
-  }
-  return ""; // Return an empty string if not in the browser
-};
+const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
 
 const getUserIdFromToken = () => {
   const token = getToken();
@@ -64,31 +56,28 @@ export default function Dashboard() {
   const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(null);
   const [resumeStatus, setResumeStatus] = useState<ResumeStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const skillChartRef = useRef<Chart | null>(null); // Ref to track the skill chart instance
-  const statusChartRef = useRef<Chart | null>(null); // Ref to track the status chart instance
+  const skillChartRef = useRef<Chart | null>(null);
+  const statusChartRef = useRef<Chart | null>(null);
   const router = useRouter();
 
-  // Check if the user is authenticated
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
-      // If no token, redirect to login page
       router.replace("/login");
     } else {
       fetchResumeAnalysis();
       fetchSkillProgresses();
-      fetchResumeStatus(); // Call the new API
+      fetchResumeStatus();
     }
   }, [router]);
 
-  const fetchResumeAnalysis = async () => {
+  const fetchData = async (endpoint: string) => {
     const token = getToken();
     const userId = getUserIdFromToken();
-
-    if (!userId) return;
+    if (!userId) return null;
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/resume/resumeanalysis`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/resume/${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,248 +88,195 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        setResumeAnalysis(data.data);
-      } else {
-        setErrorMessage("Failed to fetch resume analysis.");
+        return data.data;
       }
+      throw new Error(`Failed to fetch ${endpoint}`);
     } catch (error) {
-      console.error("Error fetching resume analysis:", error);
-      setErrorMessage("An error occurred while fetching resume analysis.");
+      console.error(`Error fetching ${endpoint}:`, error);
+      setErrorMessage(`An error occurred while fetching ${endpoint}.`);
+      return null;
     }
+  };
+
+  const fetchResumeAnalysis = async () => {
+    const data = await fetchData("resumeanalysis");
+    if (data) setResumeAnalysis(data);
   };
 
   const fetchSkillProgresses = async () => {
-    const token = getToken();
-    const userId = getUserIdFromToken();
-
-    if (!userId) return;
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/resume/resumeskills`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSkillProgresses(data.data);
-      } else {
-        setErrorMessage("Failed to fetch skill progresses.");
-      }
-    } catch (error) {
-      console.error("Error fetching skill progresses:", error);
-      setErrorMessage("An error occurred while fetching skill progresses.");
-    }
+    const data = await fetchData("resumeskills");
+    if (data) setSkillProgresses(data);
   };
 
   const fetchResumeStatus = async () => {
-    const token = getToken();
-    const userId = getUserIdFromToken();
-
-    if (!userId) return;
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/resume/resumestatus`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setResumeStatus(data.data); // Set resume status
-      } else {
-        setErrorMessage("Failed to fetch resume status.");
-      }
-    } catch (error) {
-      console.error("Error fetching resume status:", error);
-      setErrorMessage("An error occurred while fetching resume status.");
-    }
+    const data = await fetchData("resumestatus");
+    if (data) setResumeStatus(data);
   };
 
-  // Function to render skill chart using Chart.js
   const renderSkillChart = (skillProgresses: SkillProgress) => {
     const ctx = document.getElementById('skillsChart') as HTMLCanvasElement;
-
-    // Destroy the previous chart if it exists
-    if (skillChartRef.current) {
-      skillChartRef.current.destroy();
-    }
-
-    // Create new chart instance and save to ref
+    if (skillChartRef.current) skillChartRef.current.destroy();
+    
     if (ctx && skillProgresses) {
       skillChartRef.current = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: skillProgresses.skills.map((skill) => skill.skillName),
-          datasets: [
-            {
-              label: 'Skill Level (%)',
-              data: skillProgresses.skills.map((skill) => skill.skillLevel),
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              borderColor: 'rgba(75, 192, 192, 1)',
-              borderWidth: 1,
-            },
-          ],
+          labels: skillProgresses.skills.map(skill => skill.skillName),
+          datasets: [{
+            label: 'Skill Level (%)',
+            data: skillProgresses.skills.map(skill => skill.skillLevel),
+            backgroundColor: 'rgba(99, 102, 241, 0.5)',
+            borderColor: 'rgb(99, 102, 241)',
+            borderWidth: 1,
+          }]
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,
           scales: {
             y: {
               beginAtZero: true,
               max: 100,
-            },
-          },
-        },
+            }
+          }
+        }
       });
     }
   };
 
-  // Function to render resume status chart using Chart.js
   const renderStatusChart = (resumeStatus: ResumeStatus) => {
     const ctx = document.getElementById('statusChart') as HTMLCanvasElement;
-
-    // Destroy the previous chart if it exists
-    if (statusChartRef.current) {
-      statusChartRef.current.destroy();
-    }
-
-    // Create new chart instance and save to ref
+    if (statusChartRef.current) statusChartRef.current.destroy();
+    
     if (ctx && resumeStatus) {
       statusChartRef.current = new Chart(ctx, {
         type: 'pie',
         data: {
           labels: ['Shortlisted', 'Applied', 'Interview', 'Rejected'],
-          datasets: [
-            {
-              label: 'Application Status',
-              data: [resumeStatus.shortlist, resumeStatus.applied, resumeStatus.interview, resumeStatus.rejected],
-              backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'],
-            },
-          ],
+          datasets: [{
+            data: [resumeStatus.shortlist, resumeStatus.applied, resumeStatus.interview, resumeStatus.rejected],
+            backgroundColor: [
+              'rgba(34, 197, 94, 0.6)',
+              'rgba(59, 130, 246, 0.6)',
+              'rgba(234, 179, 8, 0.6)',
+              'rgba(239, 68, 68, 0.6)'
+            ],
+            borderColor: [
+              'rgb(34, 197, 94)',
+              'rgb(59, 130, 246)',
+              'rgb(234, 179, 8)',
+              'rgb(239, 68, 68)'
+            ],
+            borderWidth: 1
+          }]
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             legend: {
-              position: 'top',
-            },
-            tooltip: {
-              enabled: true,
-            },
-          },
-        },
+              position: 'right'
+            }
+          }
+        }
       });
     }
   };
 
   useEffect(() => {
-    if (skillProgresses) {
-      renderSkillChart(skillProgresses);
-    }
+    if (skillProgresses) renderSkillChart(skillProgresses);
   }, [skillProgresses]);
 
   useEffect(() => {
-    if (resumeStatus) {
-      renderStatusChart(resumeStatus);
-    }
+    if (resumeStatus) renderStatusChart(resumeStatus);
   }, [resumeStatus]);
 
+  const EmptyState = ({ message }: { message: string }) => (
+    <div className="flex items-center justify-center h-full">
+      <p className="text-gray-500 text-center">{message}</p>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-gray-50">
       <Sidebar />
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Top row - Status Overview */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Resume Status Chart */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium">Application Status Overview</CardTitle>
+              </CardHeader>
+              <CardContent className="h-64">
+                {resumeStatus ? (
+                  <canvas id="statusChart" />
+                ) : (
+                  <EmptyState message="Upload your resume to see application status" />
+                )}
+              </CardContent>
+            </Card>
 
-      {/* Main content */}
-      <div className="flex-1 p-6">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <h1 className="text-4xl font-extrabold text-gray-800 col-span-2 text-center mb-8">Dashboard</h1>
+            {/* Skills Progress Chart */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium">Skills Assessment</CardTitle>
+              </CardHeader>
+              <CardContent className="h-64">
+                {skillProgresses ? (
+                  <canvas id="skillsChart" />
+                ) : (
+                  <EmptyState message="Upload your resume to see skills assessment" />
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-          {/* Error Message */}
-          {errorMessage && <div className="text-red-500 text-center col-span-2">{errorMessage}</div>}
+          {/* Bottom row - Strengths and Weaknesses */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Strengths */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium">Profile Strengths</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {resumeAnalysis?.strengths ? (
+                  <ul className="space-y-2">
+                    {resumeAnalysis.strengths.map((strength, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="inline-block w-2 h-2 mt-2 mr-2 bg-green-500 rounded-full" />
+                        <span className="text-gray-700">{strength}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState message="Upload your resume to see strengths analysis" />
+                )}
+              </CardContent>
+            </Card>
 
-          {/* Strengths Card */}
-          <Card className="shadow-lg rounded-lg bg-white p-8">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-700">Strengths</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {resumeAnalysis ? (
-                <ul className="list-disc list-inside">
-                  {resumeAnalysis.strengths.map((strength, index) => (
-                    <li key={index} className="text-gray-600">
-                      {strength}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-600 text-center">Please upload a resume to see the strengths.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Weaknesses Card */}
-          <Card className="shadow-lg rounded-lg bg-white p-8">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-700">Weaknesses</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {resumeAnalysis ? (
-                <ul className="list-disc list-inside">
-                  {resumeAnalysis.weaknesses.map((weakness, index) => (
-                    <li key={index} className="text-gray-600">
-                      {weakness}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-600 text-center">Please upload a resume to see the weaknesses.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Skill Progress Card */}
-          <Card className="shadow-lg rounded-lg bg-white p-8 col-span-2">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-700">Skill Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {skillProgresses ? (
-                <>
-                  <p className="text-gray-500 mt-4 text-center">
-                    Evaluated At: {new Date(skillProgresses.evaluatedAt).toLocaleString()}
-                  </p>
-                  {/* Chart for skill progress */}
-                  <canvas id="skillsChart"></canvas>
-                </>
-              ) : (
-                <p className="text-gray-600 text-center">Please upload a resume to see the skill progress.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Resume Status Card */}
-          <Card className="shadow-lg rounded-lg bg-white p-8 col-span-2">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-700">Resume Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {resumeStatus ? (
-                <>
-                  {/* Pie Chart for resume status */}
-                  <canvas id="statusChart"></canvas>
-                </>
-              ) : (
-                <p className="text-gray-600 text-center">Please upload a resume to see the status.</p>
-              )}
-            </CardContent>
-          </Card>
+            {/* Weaknesses */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium">Areas for Improvement</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {resumeAnalysis?.weaknesses ? (
+                  <ul className="space-y-2">
+                    {resumeAnalysis.weaknesses.map((weakness, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="inline-block w-2 h-2 mt-2 mr-2 bg-red-500 rounded-full" />
+                        <span className="text-gray-700">{weakness}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState message="Upload your resume to see improvement suggestions" />
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
