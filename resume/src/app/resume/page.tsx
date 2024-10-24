@@ -78,6 +78,8 @@ export default function ResumeMatcher() {
       <Sidebar />
 
       {/* Main content */}
+      <div className="flex-1 ml-64">
+
       <div className="flex-1 p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Logo */}
@@ -154,6 +156,7 @@ export default function ResumeMatcher() {
           )}
         </div>
       </div>
+    </div>
     </div>
   )
 }
