@@ -5,6 +5,7 @@ import path from "path";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
 import { genAIModel, openai } from "../utils/chatAI.js";
+import { ObjectId } from 'mongodb';
 
 import { Job } from "../models/job.js";
 
@@ -385,20 +386,31 @@ export const getSkillProgresses = async (req, res) => {
   }
 };
 
+
 export const getStatusCount = async (req, res) => {
   try {
     // Destructure userId from req.body
     const { userId } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
+      return res.status(400).json({ message: 'User ID is required' });
     }
+
+    // Convert userId to ObjectId since it's stored as ObjectId in the database
+    const userObjectId = new ObjectId(userId);
 
     // Aggregate job statuses by userId
     const statusCount = await Job.aggregate([
-      { $match: { userId: userId } },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
+      { $match: { userId: userObjectId } }, // Match userId as ObjectId
+      { 
+        $group: { 
+          _id: "$status", 
+          count: { $sum: 1 } 
+        } 
+      }
     ]);
+
+    console.log(statusCount); // Debugging: check the output
 
     // Initialize status counts
     const result = {
@@ -410,15 +422,15 @@ export const getStatusCount = async (req, res) => {
 
     // Populate the result with actual counts
     statusCount.forEach((statusObj) => {
-      if (result.hasOwnProperty(statusObj._id)) {
-        result[statusObj._id] = statusObj.count;
+      const status = statusObj._id.toLowerCase(); // Normalize status to lowercase
+      if (result.hasOwnProperty(status)) {
+        result[status] = statusObj.count;
       }
     });
 
     res.json({ data: result });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error retrieving job status count", error });
+    res.status(500).json({ message: 'Error retrieving job status count', error });
   }
 };
+

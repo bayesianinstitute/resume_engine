@@ -5,10 +5,10 @@ import { jwtDecode } from "jwt-decode";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Sidebar from "@/components/ui/sidebar";
-import { Chart, BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend } from 'chart.js'; // Import Chart.js and required components
+import { Chart, BarController, PieController, ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend } from 'chart.js'; // Import Chart.js and required components
 
 // Register Chart.js components
-Chart.register(BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
+Chart.register(BarController, PieController, ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
 
 // Define the custom JWT payload type
 interface CustomJwtPayload {
@@ -31,7 +31,10 @@ interface SkillProgress {
 }
 
 interface ResumeStatus {
-  status: string;
+  shortlist: number;
+  applied: number;
+  interview: number;
+  rejected: number;
 }
 
 // Helper functions for getting and decoding token
@@ -59,9 +62,10 @@ const getUserIdFromToken = () => {
 export default function Dashboard() {
   const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
   const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(null);
-  const [resumeStatus, setResumeStatus] = useState<ResumeStatus | null>(null); // New state for resume status
+  const [resumeStatus, setResumeStatus] = useState<ResumeStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const chartRef = useRef<Chart | null>(null); // Ref to track the chart instance
+  const skillChartRef = useRef<Chart | null>(null); // Ref to track the skill chart instance
+  const statusChartRef = useRef<Chart | null>(null); // Ref to track the status chart instance
   const router = useRouter();
 
   // Check if the user is authenticated
@@ -161,18 +165,18 @@ export default function Dashboard() {
     }
   };
 
-  // Function to render chart using Chart.js
-  const renderChart = (skillProgresses: SkillProgress) => {
+  // Function to render skill chart using Chart.js
+  const renderSkillChart = (skillProgresses: SkillProgress) => {
     const ctx = document.getElementById('skillsChart') as HTMLCanvasElement;
 
     // Destroy the previous chart if it exists
-    if (chartRef.current) {
-      chartRef.current.destroy();
+    if (skillChartRef.current) {
+      skillChartRef.current.destroy();
     }
 
     // Create new chart instance and save to ref
     if (ctx && skillProgresses) {
-      chartRef.current = new Chart(ctx, {
+      skillChartRef.current = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: skillProgresses.skills.map((skill) => skill.skillName),
@@ -198,11 +202,55 @@ export default function Dashboard() {
     }
   };
 
+  // Function to render resume status chart using Chart.js
+  const renderStatusChart = (resumeStatus: ResumeStatus) => {
+    const ctx = document.getElementById('statusChart') as HTMLCanvasElement;
+
+    // Destroy the previous chart if it exists
+    if (statusChartRef.current) {
+      statusChartRef.current.destroy();
+    }
+
+    // Create new chart instance and save to ref
+    if (ctx && resumeStatus) {
+      statusChartRef.current = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Shortlisted', 'Applied', 'Interview', 'Rejected'],
+          datasets: [
+            {
+              label: 'Application Status',
+              data: [resumeStatus.shortlist, resumeStatus.applied, resumeStatus.interview, resumeStatus.rejected],
+              backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'],
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: 'top',
+            },
+            tooltip: {
+              enabled: true,
+            },
+          },
+        },
+      });
+    }
+  };
+
   useEffect(() => {
     if (skillProgresses) {
-      renderChart(skillProgresses);
+      renderSkillChart(skillProgresses);
     }
   }, [skillProgresses]);
+
+  useEffect(() => {
+    if (resumeStatus) {
+      renderStatusChart(resumeStatus);
+    }
+  }, [resumeStatus]);
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -284,7 +332,10 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               {resumeStatus ? (
-                <p className="text-gray-600 text-center">Status: {resumeStatus.status}</p>
+                <>
+                  {/* Pie Chart for resume status */}
+                  <canvas id="statusChart"></canvas>
+                </>
               ) : (
                 <p className="text-gray-600 text-center">Please upload a resume to see the status.</p>
               )}

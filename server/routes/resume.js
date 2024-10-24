@@ -13,7 +13,7 @@ router.post('/matcher', upload.single('resume'), matcher);
 router.post('/stats', upload.single('resume'), stats);
 router.post('/resumeanalysis', getResumeAnalysis);
 router.post('/resumeskills', getSkillProgresses);
-router.get('/resumestatus', getStatusCount);
+router.post('/resumestatus', getStatusCount);
 router.post('/scrape', getLinkedInJobs);
 router.post('/preparation', generatePreparationResources);
 router.get('/jobtracker',verifyTokenMiddleware,getJobs);
