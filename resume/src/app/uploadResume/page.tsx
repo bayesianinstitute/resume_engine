@@ -266,6 +266,14 @@ export default function ResumeMatcher() {
                 {errorMessage}
               </div>
             )}
+          {matchResult && (
+              <Card className="shadow-lg rounded-lg bg-white p-8 mt-6">
+                <CardContent>
+                  <h3 className="text-lg font-bold text-gray-700">Match Result</h3>
+                  <p className="text-gray-600 whitespace-pre-line">{matchResult}</p>
+                </CardContent>
+              </Card>
+            )}
 
 
             {resumeAnalysis && (
