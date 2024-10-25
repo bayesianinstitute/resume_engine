@@ -13,10 +13,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Upload, FileText, CheckCircle } from "lucide-react";
+import { Upload, CheckCircle } from "lucide-react";
 import Sidebar from "@/components/ui/sidebar";
 
-// Define the custom JWT payload type
 interface CustomJwtPayload {
   userId: string;
 }
@@ -36,12 +35,11 @@ interface SkillProgress {
   evaluatedAt: string;
 }
 
-// Helper functions for getting and decoding token
 const getToken = () => {
   if (typeof window !== "undefined") {
     return localStorage.getItem("token") || "";
   }
-  return ""; // Return an empty string if not in the browser
+  return "";
 };
 
 const getUserIdFromToken = () => {
@@ -62,20 +60,14 @@ export default function ResumeMatcher() {
   const [file, setFile] = useState<File | null>(null);
   const [matchResult, setMatchResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(
-    null
-  );
-  const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(
-    null
-  );
+  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const router = useRouter();
 
-  // Check if the user is authenticated
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
-      // If no token, redirect to login page
       router.replace("/login");
     } else {
       fetchResumeAnalysis();
@@ -92,26 +84,27 @@ export default function ResumeMatcher() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    // Fetch token and userId
     const token = getToken();
     const userId = getUserIdFromToken();
 
     if (!userId) {
-      alert("User not authenticated");
+      setErrorMessage("User not authenticated");
       return;
     }
 
     if (!file) {
-      alert("Please upload a resume.");
+      setErrorMessage("Please upload a resume.");
       return;
     }
 
     const formData = new FormData();
     formData.append("resume", file);
-    formData.append("userId", userId); // Include userId in the form data
+    formData.append("userId", userId);
 
     try {
       setLoading(true);
+      setErrorMessage(null);
+      
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/resume/stats`,
         {
@@ -130,7 +123,6 @@ export default function ResumeMatcher() {
       const data = await response.json();
       let result = `${data.matchResult} \n ${data.evaluationResponse}`;
 
-      // Deduplication: Remove any repeated lines in the result
       result = result
         .split("\n")
         .filter(
@@ -139,16 +131,19 @@ export default function ResumeMatcher() {
         )
         .join("\n");
 
-      setMatchResult(`Score: ${result}`);
+      setMatchResult(result);
+      
+      // Refresh analysis and skills after successful upload
+      await Promise.all([fetchResumeAnalysis(), fetchSkillProgresses()]);
+      
     } catch (error) {
       console.error("Error:", error);
-      setMatchResult("An error occurred while matching the resume.");
+      setErrorMessage("An error occurred while matching the resume.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch resume analysis (strengths and weaknesses)
   const fetchResumeAnalysis = async () => {
     const token = getToken();
     const userId = getUserIdFromToken();
@@ -180,7 +175,6 @@ export default function ResumeMatcher() {
     }
   };
 
-  // Fetch skill progresses (skills)
   const fetchSkillProgresses = async () => {
     const token = getToken();
     const userId = getUserIdFromToken();
@@ -214,13 +208,10 @@ export default function ResumeMatcher() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
       <Sidebar />
       <div className="flex-1 ml-64">
-        {/* Main content */}
         <div className="flex-1 p-6">
           <div className="max-w-4xl mx-auto space-y-6">
-            {/* Title */}
             <h1 className="text-4xl font-extrabold text-gray-800 text-center">
               Update Resume
             </h1>
@@ -228,7 +219,6 @@ export default function ResumeMatcher() {
               Update your resume
             </p>
 
-            {/* Upload Form */}
             <Card className="shadow-lg rounded-lg bg-white p-8">
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-bold text-gray-700">
@@ -239,10 +229,7 @@ export default function ResumeMatcher() {
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <Label
-                      htmlFor="resume"
-                      className="text-gray-700 font-medium"
-                    >
+                    <Label htmlFor="resume" className="text-gray-700 font-medium">
                       Resume
                     </Label>
                     <div className="flex items-center space-x-2">
@@ -252,9 +239,7 @@ export default function ResumeMatcher() {
                         onChange={handleFileChange}
                         className="flex-1 file:bg-blue-500 file:text-white file:px-4 file:py-2 file:rounded-md"
                       />
-                      {file && (
-                        <CheckCircle className="text-green-500 w-6 h-6" />
-                      )}
+                      {file && <CheckCircle className="text-green-500 w-6 h-6" />}
                     </div>
                   </div>
 
@@ -276,12 +261,13 @@ export default function ResumeMatcher() {
               </CardContent>
             </Card>
 
-            {/* Display Error Message */}
             {errorMessage && (
-              <div className="text-red-500 text-center">{errorMessage}</div>
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+                {errorMessage}
+              </div>
             )}
 
-            {/* Resume Analysis */}
+
             {resumeAnalysis && (
               <Card className="shadow-lg rounded-lg bg-white p-8">
                 <CardHeader className="text-center">
@@ -313,7 +299,6 @@ export default function ResumeMatcher() {
               </Card>
             )}
 
-            {/* Skill Progress */}
             {skillProgresses && (
               <Card className="shadow-lg rounded-lg bg-white p-8">
                 <CardHeader className="text-center">

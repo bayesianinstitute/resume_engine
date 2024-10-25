@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { jwtDecode } from "jwt-decode";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Sidebar from "@/components/ui/sidebar";
 import {
-  Chart,
+  Chart as ChartJS,
+  ChartData,
+  ChartOptions,
   BarController,
   PieController,
   ArcElement,
@@ -18,7 +20,7 @@ import {
   Legend,
 } from "chart.js";
 
-Chart.register(
+ChartJS.register(
   BarController,
   PieController,
   ArcElement,
@@ -73,31 +75,22 @@ const getUserIdFromToken = () => {
   return null;
 };
 
+const EmptyState = ({ message }: { message: string }) => (
+  <div className="flex items-center justify-center h-full">
+    <p className="text-gray-500 text-center">{message}</p>
+  </div>
+);
+
 export default function Dashboard() {
-  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(
-    null
-  );
-  const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(
-    null
-  );
+  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(null);
   const [resumeStatus, setResumeStatus] = useState<ResumeStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const skillChartRef = useRef<Chart | null>(null);
-  const statusChartRef = useRef<Chart | null>(null);
+  const skillChartRef = useRef<ChartJS<"bar", number[]> | null>(null);
+  const statusChartRef = useRef<ChartJS<"pie", number[]> | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.replace("/login");
-    } else {
-      fetchResumeAnalysis();
-      fetchSkillProgresses();
-      fetchResumeStatus();
-    }
-  }, [router]);
-
-  const fetchData = async (endpoint: string) => {
+  const fetchData = useCallback(async (endpoint: string) => {
     const token = getToken();
     const userId = getUserIdFromToken();
     if (!userId) return null;
@@ -125,121 +118,143 @@ export default function Dashboard() {
       setErrorMessage(`An error occurred while fetching ${endpoint}.`);
       return null;
     }
-  };
+  }, []);
 
-  const fetchResumeAnalysis = async () => {
+  const fetchResumeAnalysis = useCallback(async () => {
     const data = await fetchData("resumeanalysis");
     if (data) setResumeAnalysis(data);
-  };
+  }, [fetchData]);
 
-  const fetchSkillProgresses = async () => {
+  const fetchSkillProgresses = useCallback(async () => {
     const data = await fetchData("resumeskills");
     if (data) setSkillProgresses(data);
-  };
+  }, [fetchData]);
 
-  const fetchResumeStatus = async () => {
+  const fetchResumeStatus = useCallback(async () => {
     const data = await fetchData("resumestatus");
     if (data) setResumeStatus(data);
-  };
+  }, [fetchData]);
 
-  const renderSkillChart = (skillProgresses: SkillProgress) => {
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.replace("/login");
+    } else {
+      fetchResumeAnalysis();
+      fetchSkillProgresses();
+      fetchResumeStatus();
+    }
+  }, [router, fetchResumeAnalysis, fetchSkillProgresses, fetchResumeStatus]);
+
+  const renderSkillChart = useCallback((skillProgresses: SkillProgress) => {
     const ctx = document.getElementById("skillsChart") as HTMLCanvasElement;
     if (skillChartRef.current) skillChartRef.current.destroy();
 
     if (ctx && skillProgresses) {
-      skillChartRef.current = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: skillProgresses.skills.map((skill) => skill.skillName),
-          datasets: [
-            {
-              label: "Skill Level (%)",
-              data: skillProgresses.skills.map((skill) => skill.skillLevel),
-              backgroundColor: "rgba(99, 102, 241, 0.5)",
-              borderColor: "rgb(99, 102, 241)",
-              borderWidth: 1,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true,
-              max: 100,
-            },
+      const data: ChartData<"bar", number[]> = {
+        labels: skillProgresses.skills.map((skill) => skill.skillName),
+        datasets: [
+          {
+            label: "Skill Level (%)",
+            data: skillProgresses.skills.map((skill) => skill.skillLevel),
+            backgroundColor: "rgba(99, 102, 241, 0.5)",
+            borderColor: "rgb(99, 102, 241)",
+            borderWidth: 1,
+          },
+        ],
+      };
+
+      const options: ChartOptions<"bar"> = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
           },
         },
-      });
-    }
-  };
+      };
 
-  const renderStatusChart = (resumeStatus: ResumeStatus) => {
+      const config = {
+        type: "bar" as const,
+        data,
+        options,
+      };
+
+      skillChartRef.current = new ChartJS(ctx, config);
+    }
+  }, []);
+
+  const renderStatusChart = useCallback((resumeStatus: ResumeStatus) => {
     const ctx = document.getElementById("statusChart") as HTMLCanvasElement;
     if (statusChartRef.current) statusChartRef.current.destroy();
 
     if (ctx && resumeStatus) {
-      statusChartRef.current = new Chart(ctx, {
-        type: "pie",
-        data: {
-          labels: ["Shortlisted", "Applied", "Interview", "Rejected"],
-          datasets: [
-            {
-              data: [
-                resumeStatus.shortlist,
-                resumeStatus.applied,
-                resumeStatus.interview,
-                resumeStatus.rejected,
-              ],
-              backgroundColor: [
-                "rgba(34, 197, 94, 0.6)",
-                "rgba(59, 130, 246, 0.6)",
-                "rgba(234, 179, 8, 0.6)",
-                "rgba(239, 68, 68, 0.6)",
-              ],
-              borderColor: [
-                "rgb(34, 197, 94)",
-                "rgb(59, 130, 246)",
-                "rgb(234, 179, 8)",
-                "rgb(239, 68, 68)",
-              ],
-              borderWidth: 1,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: "right",
-            },
+      const data: ChartData<"pie", number[]> = {
+        labels: ["Shortlisted", "Applied", "Interview", "Rejected"],
+        datasets: [
+          {
+            data: [
+              resumeStatus.shortlist,
+              resumeStatus.applied,
+              resumeStatus.interview,
+              resumeStatus.rejected,
+            ],
+            backgroundColor: [
+              "rgba(34, 197, 94, 0.6)",
+              "rgba(59, 130, 246, 0.6)",
+              "rgba(234, 179, 8, 0.6)",
+              "rgba(239, 68, 68, 0.6)",
+            ],
+            borderColor: [
+              "rgb(34, 197, 94)",
+              "rgb(59, 130, 246)",
+              "rgb(234, 179, 8)",
+              "rgb(239, 68, 68)",
+            ],
+            borderWidth: 1,
+          },
+        ],
+      };
+
+      const options: ChartOptions<"pie"> = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "right" as const,
           },
         },
-      });
+      };
+
+      const config = {
+        type: "pie" as const,
+        data,
+        options,
+      };
+
+      statusChartRef.current = new ChartJS(ctx, config);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (skillProgresses) renderSkillChart(skillProgresses);
-  }, [skillProgresses]);
+  }, [skillProgresses, renderSkillChart]);
 
   useEffect(() => {
     if (resumeStatus) renderStatusChart(resumeStatus);
-  }, [resumeStatus]);
-
-  const EmptyState = ({ message }: { message: string }) => (
-    <div className="flex items-center justify-center h-full">
-      <p className="text-gray-500 text-center">{message}</p>
-    </div>
-  );
+  }, [resumeStatus, renderStatusChart]);
 
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       <div className="flex-1 ml-64">
         <div className="flex-1 overflow-auto p-6">
+          {errorMessage && (
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
+              {errorMessage}
+            </div>
+          )}
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Top row - Status Overview */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

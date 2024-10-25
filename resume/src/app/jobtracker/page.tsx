@@ -125,15 +125,19 @@ function JobCard({
 
       {isOpen && (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogContent className="bg-gray-50 p-6 rounded-lg shadow-lg max-w-lg">
-            <DialogHeader className="border-b border-gray-200 mb-4 pb-4">
-              <DialogTitle className="text-2xl font-bold text-gray-900">
-                Update Job
-              </DialogTitle>
-              <DialogDescription className="text-sm text-gray-600">
-                Choose an action for this job.
-              </DialogDescription>
-            </DialogHeader>
+          <div className="bg-gray-50 p-6 rounded-lg shadow-lg max-w-lg">
+            <div className="border-b border-gray-200 mb-4 pb-4">
+              <DialogHeader>
+                <div className="mb-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    <DialogTitle>Update Job</DialogTitle>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600">
+                  <DialogDescription>Choose an action for this job.</DialogDescription>
+                </div>
+              </DialogHeader>
+            </div>
             <div className="space-y-6">
               {/* Update Status */}
               <select
@@ -172,7 +176,7 @@ function JobCard({
                 Cancel
               </Button>
             </div>
-          </DialogContent>
+          </div>
         </Dialog>
       )}
     </>
