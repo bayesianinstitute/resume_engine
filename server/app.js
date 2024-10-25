@@ -8,6 +8,7 @@ import { connectDB } from "./utils/features.js";
 import userRouter from "./routes/user.js";
 import resumeRouter from "./routes/resume.js";
 
+
 // Load environment variables
 dotenv.config();
 
@@ -40,7 +41,6 @@ app.use(errorMiddleware);
 // Start server and connect to MongoDB
 app.listen(port, host, async () => {
   if (!mongoDBUrl) {
-    console.log('MongoDB URI:', process.env.MONGODB_URI);
 
     console.error("MongoDB URL is not provided in the environment variables.");
     process.exit(1); // Exit with failure
