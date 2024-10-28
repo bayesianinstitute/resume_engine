@@ -1,4 +1,4 @@
-import { Job } from '../models/job.js';
+import { Job } from '../models/jobTracker.js';
 
 // Fetch jobs for a specific user
 export const getJobs = async (req, res) => {

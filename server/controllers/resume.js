@@ -7,7 +7,7 @@ import { SkillProgress } from "../models/skill.js";
 import { genAIModel, openai } from "../utils/chatAI.js";
 import { ObjectId } from 'mongodb';
 
-import { Job } from "../models/job.js";
+import { Job } from "../models/jobTracker.js";
 
 export const matcher = async (req, res) => {
   const jobDescription = req.body.jobDescription;

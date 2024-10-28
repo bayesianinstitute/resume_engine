@@ -7,7 +7,7 @@ import { errorMiddleware } from "./middleware/error.js";
 import { connectDB } from "./utils/features.js";
 import userRouter from "./routes/user.js";
 import resumeRouter from "./routes/resume.js";
-
+import jobRouter from "./routes/jobRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -34,7 +34,7 @@ export const myCache = new NodeCache();
 // Routes
 app.use("/api/v1/user", userRouter);
 app.use("/api/v1/resume", resumeRouter);
-
+app.use("/api/v1/job", jobRouter);
 // Error middleware
 app.use(errorMiddleware);
 
