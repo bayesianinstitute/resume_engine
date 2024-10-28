@@ -5,48 +5,36 @@ import { jwtDecode } from "jwt-decode";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Upload, CheckCircle } from "lucide-react";
+import { Upload, CheckCircle, XCircle, Eye } from "lucide-react"; // Import Eye icon for view button
 import Sidebar from "@/components/ui/sidebar";
+import Modal from "@/components/ui/modal";
 
-interface CustomJwtPayload {
-  userId: string;
+interface StrengthOrWeakness {
+  point: string;
 }
 
 interface Skill {
   skillName: string;
-  skillLevel: number;
+  skillLevel: string;
 }
 
-interface ResumeAnalysis {
-  strengths: string[];
-  weaknesses: string[];
-}
-
-interface SkillProgress {
+interface Resume {
+  resume: string; // Base64-encoded string of the PDF data
+  strengths: Array<StrengthOrWeakness | string>;
+  weaknesses: Array<StrengthOrWeakness | string>;
   skills: Skill[];
-  evaluatedAt: string;
+  uploadedAt: string;
 }
 
-const getToken = () => {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("token") || "";
-  }
-  return "";
-};
+const getToken = () => (typeof window !== "undefined" ? localStorage.getItem("token") || "" : "");
 
 const getUserIdFromToken = () => {
   const token = getToken();
   if (token) {
     try {
-      const decodedToken = jwtDecode<CustomJwtPayload>(token);
+      const decodedToken = jwtDecode(token) as { userId: string };
       return decodedToken?.userId;
     } catch (error) {
       console.error("Error decoding token:", error);
@@ -56,24 +44,45 @@ const getUserIdFromToken = () => {
   return null;
 };
 
-export default function ResumeMatcher() {
+export default function ResumeViewer() {
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [selectedResume, setSelectedResume] = useState<Resume | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [matchResult, setMatchResult] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
-  const [skillProgresses, setSkillProgresses] = useState<SkillProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) {
       router.replace("/login");
     } else {
-      fetchResumeAnalysis();
-      fetchSkillProgresses();
+      fetchAllResumes();
     }
   }, [router]);
+
+  const fetchAllResumes = async () => {
+    const userId = getUserIdFromToken();
+    if (!userId) return;
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/resume/getAllResumes?userId=${userId}`,
+        {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }
+      );
+      const data = await response.json();
+      if (response.ok) {
+        setResumes(data.data);
+      } else {
+        setErrorMessage("Failed to fetch resumes.");
+      }
+    } catch (error) {
+      console.error("Error fetching resumes:", error);
+      setErrorMessage("An error occurred while fetching resumes.");
+    }
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -104,7 +113,7 @@ export default function ResumeMatcher() {
     try {
       setLoading(true);
       setErrorMessage(null);
-      
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/resume/stats`,
         {
@@ -117,219 +126,160 @@ export default function ResumeMatcher() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to match resume with job description.");
+        throw new Error("Failed to upload and analyze resume.");
       }
 
-      const data = await response.json();
-      let result = `${data.matchResult} \n ${data.evaluationResponse}`;
-
-      result = result
-        .split("\n")
-        .filter(
-          (line, index, self) =>
-            index === self.findIndex((t) => t.trim() === line.trim())
-        )
-        .join("\n");
-
-      setMatchResult(result);
-      
-      // Refresh analysis and skills after successful upload
-      await Promise.all([fetchResumeAnalysis(), fetchSkillProgresses()]);
-      
+      await fetchAllResumes();
+      setFile(null);
     } catch (error) {
       console.error("Error:", error);
-      setErrorMessage("An error occurred while matching the resume.");
+      setErrorMessage("An error occurred while uploading the resume.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchResumeAnalysis = async () => {
-    const token = getToken();
-    const userId = getUserIdFromToken();
+  const handleCloseModal = () => setSelectedResume(null);
 
-    if (!userId) return;
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/resume/resumeanalysis`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ userId }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setResumeAnalysis(data.data);
-      } else {
-        setErrorMessage("Failed to fetch resume analysis.");
+  const handleViewResume = () => {
+    if (selectedResume && selectedResume.resume) {
+      // Convert Base64 string to binary buffer
+      console.log("selectedResume.resume",selectedResume.resume)
+      const byteCharacters = atob(selectedResume.resume); // Decode Base64 string
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
-    } catch (error) {
-      console.error("Error fetching resume analysis:", error);
-      setErrorMessage("An error occurred while fetching resume analysis.");
+      const byteArray = new Uint8Array(byteNumbers);
+  
+      // Create a blob and URL for the PDF
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(blob);
+  
+      // Open the PDF in a new tab
+      window.open(blobUrl);
     }
   };
-
-  const fetchSkillProgresses = async () => {
-    const token = getToken();
-    const userId = getUserIdFromToken();
-
-    if (!userId) return;
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/resume/resumeskills`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ userId }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setSkillProgresses(data.data);
-      } else {
-        setErrorMessage("Failed to fetch skill progresses.");
-      }
-    } catch (error) {
-      console.error("Error fetching skill progresses:", error);
-      setErrorMessage("An error occurred while fetching skill progresses.");
-    }
-  };
+  
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
       <div className="flex-1 ml-64">
         <div className="flex-1 p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
-            <h1 className="text-4xl font-extrabold text-gray-800 text-center">
-              Update Resume
-            </h1>
-            <p className="text-lg text-center text-gray-600 mb-6">
-              Update your resume
-            </p>
+          <h1 className="text-4xl font-extrabold text-gray-800 text-center">Your Resumes</h1>
 
-            <Card className="shadow-lg rounded-lg bg-white p-8">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-bold text-gray-700">
-                  Upload Your Resume
-                </CardTitle>
-                <CardDescription className="text-gray-500"></CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="resume" className="text-gray-700 font-medium">
-                      Resume
-                    </Label>
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        id="resume"
-                        type="file"
-                        onChange={handleFileChange}
-                        className="flex-1 file:bg-blue-500 file:text-white file:px-4 file:py-2 file:rounded-md"
-                      />
-                      {file && <CheckCircle className="text-green-500 w-6 h-6" />}
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      "Uploading..."
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5 mr-2" />
-                        Upload Resume
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            {errorMessage && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-                {errorMessage}
+          <div className="max-w-lg mx-auto mt-12">
+            <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-8">
+              <Label htmlFor="resume" className="text-gray-700 font-medium">
+                Upload Resume
+              </Label>
+              <div className="flex items-center mt-4">
+                <Input
+                  id="resume"
+                  type="file"
+                  onChange={handleFileChange}
+                  className="flex-1 file:bg-blue-500 file:text-white file:px-4 file:py-2 file:rounded-md"
+                />
+                {file && <CheckCircle className="text-green-500 w-6 h-6 ml-2" />}
               </div>
-            )}
-          {matchResult && (
-              <Card className="shadow-lg rounded-lg bg-white p-8 mt-6">
+              <Button
+                type="submit"
+                className="w-full mt-4 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center"
+                disabled={loading}
+              >
+                {loading ? "Uploading..." : "Upload Resume"}
+              </Button>
+            </form>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-12 mx-auto max-w-5xl">
+            {resumes.map((resume, index) => (
+              <Card
+                key={index}
+                onClick={() => setSelectedResume(resume)}
+                className="cursor-pointer shadow-lg rounded-lg p-4 hover:shadow-xl transition-transform duration-200"
+              >
                 <CardContent>
-                  <h3 className="text-lg font-bold text-gray-700">Match Result</h3>
-                  <p className="text-gray-600 whitespace-pre-line">{matchResult}</p>
+                  <CardTitle className="text-lg font-bold text-gray-800">Resume {index + 1}</CardTitle>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Uploaded At: {new Date(resume.uploadedAt).toLocaleString()}
+                  </p>
                 </CardContent>
               </Card>
-            )}
+            ))}
+          </div>
 
+          {errorMessage && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-6 text-center">
+              <p>{errorMessage}</p>
+            </div>
+          )}
 
-            {resumeAnalysis && (
-              <Card className="shadow-lg rounded-lg bg-white p-8">
-                <CardHeader className="text-center">
-                  <CardTitle className="text-2xl font-bold text-gray-700">
-                    Resume Analysis
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-lg font-bold text-gray-700">Strengths</h3>
+          {selectedResume && (
+            <Modal onClose={handleCloseModal}>
+              <div className="bg-white p-8 rounded-lg shadow-lg">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-800">Resume Analysis</h2>
+                  <XCircle onClick={handleCloseModal} className="w-6 h-6 text-gray-500 cursor-pointer" />
+                </div>
+
+                <div className="mt-4">
+                  {selectedResume.strengths && selectedResume.strengths.length > 0 ? (
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-700">Strengths</h3>
+                      <ul className="list-disc list-inside">
+                        {selectedResume.strengths.map((strength, index) => (
+                          <li key={index} className="text-gray-600">
+                            {strength && typeof strength === "object" && "point" in strength
+                              ? strength.point
+                              : strength || "No data available"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-gray-600">No data available</p>
+                  )}
+
+                  {selectedResume.weaknesses && selectedResume.weaknesses.length > 0 ? (
+                    <div className="mt-4">
+                      <h3 className="text-lg font-bold text-gray-700">Weaknesses</h3>
+                      <ul className="list-disc list-inside">
+                        {selectedResume.weaknesses.map((weakness, index) => (
+                          <li key={index} className="text-gray-600">
+                            {weakness && typeof weakness === "object" && "point" in weakness
+                              ? weakness.point
+                              : weakness || "No data available"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 mt-4">No data available</p>
+                  )}
+
+                  <h3 className="text-lg font-bold text-gray-700 mt-4">Skills</h3>
                   <ul className="list-disc list-inside">
-                    {resumeAnalysis.strengths.map((strength, index) => (
-                      <li key={index} className="text-gray-600">
-                        {strength}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <h3 className="text-lg font-bold text-gray-700 mt-4">
-                    Weaknesses
-                  </h3>
-                  <ul className="list-disc list-inside">
-                    {resumeAnalysis.weaknesses.map((weakness, index) => (
-                      <li key={index} className="text-gray-600">
-                        {weakness}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
-
-            {skillProgresses && (
-              <Card className="shadow-lg rounded-lg bg-white p-8">
-                <CardHeader className="text-center">
-                  <CardTitle className="text-2xl font-bold text-gray-700">
-                    Skill Progress
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="list-disc list-inside">
-                    {skillProgresses.skills.map((skill, index) => (
+                    {selectedResume.skills.map((skill, index) => (
                       <li key={index} className="text-gray-600">
                         {skill.skillName}: {skill.skillLevel}%
                       </li>
                     ))}
                   </ul>
-                  <p className="text-gray-500 mt-4">
-                    Evaluated At:{" "}
-                    {new Date(skillProgresses.evaluatedAt).toLocaleString()}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+
+                  {/* View Resume Button */}
+                  <Button
+                    onClick={handleViewResume}
+                    className="mt-6 bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center"
+                  >
+                    <Eye className="w-5 h-5 mr-2" />
+                    View Resume
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </div>
       </div>
     </div>
