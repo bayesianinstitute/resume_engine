@@ -66,6 +66,13 @@ const Sidebar = () => {
             <span>Resume Summary</span>
           </Link>
           <Link
+            href="/resumematch"
+            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
+          >
+            <FileText className="w-5 h-5" />
+            <span>Resume Match</span>
+          </Link>
+          <Link
             href="/interview"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
           >

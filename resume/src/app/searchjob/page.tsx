@@ -1,140 +1,57 @@
+// components/JobScraper.tsx
 "use client";
+import { useCallback, useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchJobs} from "../../lib/store/features/job/jobSearch";
+import { RootState, AppDispatch } from "../../lib/store/store";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import JobCard from "@/components/ui/jobCard";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Sidebar from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import {
-  Briefcase,
-  Calendar as CalendarIcon,
-  MapPin,
-  Search
-} from "lucide-react";
+import { Briefcase, Calendar as CalendarIcon, MapPin, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "react-toastify";
-
-interface Job {
-  _id: string;
-  title: string;
-  location: string;
-  datePosted: string;
-  experienceLevel: string;
-  description: string;
-  url: string;
-}
-
-interface JobsResponse {
-  totalJoblists: number;
-  currentPage: number;
-  totalPages: number;
-  joblists: Job[];
-}
+// import { toast } from "react-toastify";
 
 export default function JobScraper() {
-  const [jobTitle, setJobTitle] = useState("");
-  const [jobLocation, setJobLocation] = useState("");
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [datePosted, setDatePosted] = useState<Date | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalJobs, setTotalJobs] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const observer = useRef<IntersectionObserver | null>(null);
+  
+  const {
+    jobs,
+    totalJobs,
+    loading,
+    error,
+    jobTitle,
+    jobLocation,
+    datePosted,
+    currentPage,
+    isSearching,
+  } = useSelector((state: RootState) => state.jobs);
 
-  // Initial jobs fetch
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
       router.replace("/login");
       return;
     }
-    fetchInitialJobs(1);
-  }, []);
+    dispatch(fetchJobs(1));
+  }, [dispatch, router]);
 
-  const fetchInitialJobs = async (page: number) => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/job/list?page=${page}&limit=10`
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch jobs");
-      }
-
-      const data: JobsResponse = await response.json();
-      setJobs((prevJobs) => [...prevJobs, ...data.joblists]);
-      setTotalJobs(data.totalJoblists);
-      setCurrentPage(data.currentPage);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch jobs. Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = async (event: React.FormEvent) => {
+  const handleSearch = (event: React.FormEvent) => {
     event.preventDefault();
-    setIsSearching(true);
-
-    try {
-      setLoading(true);
-      const searchParams = new URLSearchParams();
-      if (jobTitle) searchParams.append("title", jobTitle);
-      if (jobLocation) searchParams.append("location", jobLocation);
-      if (datePosted)
-        searchParams.append("datePosted", datePosted.toISOString());
-
-      const response = await fetch(
-        `${
-          process.env.NEXT_PUBLIC_BASE_URL
-        }/job/search?${searchParams.toString()}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Search failed");
-      }
-
-      const searchResults: Job[] = await response.json();
-      setJobs(searchResults);
-      setTotalJobs(searchResults.length);
-      setCurrentPage(1);
-    } catch (error) {
-      toast({
-        title: "Search Failed",
-        description: "Unable to perform search. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    dispatch(searchJobs({ jobTitle, jobLocation, datePosted }));
   };
 
   const handleClearSearch = () => {
-    setJobTitle("");
-    setJobLocation("");
-    setDatePosted(null);
-    setIsSearching(false);
-    setJobs([]);
-    fetchInitialJobs(1);
+    dispatch(clearSearch());
+    dispatch(fetchJobs(1));
   };
 
   const lastJobElementRef = useCallback(
@@ -143,13 +60,16 @@ export default function JobScraper() {
       if (observer.current) observer.current.disconnect();
       observer.current = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting && currentPage < Math.ceil(totalJobs / 10)) {
-          fetchInitialJobs(currentPage + 1);
+          dispatch(fetchJobs(currentPage + 1));
         }
       });
       if (node) observer.current.observe(node);
     },
-    [loading, currentPage, totalJobs]
+    [loading, currentPage, totalJobs, dispatch]
   );
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>{error}</div>;
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -179,7 +99,7 @@ export default function JobScraper() {
                         <Briefcase className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <Input
                           value={jobTitle}
-                          onChange={(e) => setJobTitle(e.target.value)}
+                          onChange={(e) => dispatch({ type: "jobs/setJobTitle", payload: e.target.value })}
                           placeholder="e.g. Data Scientist"
                           className="pl-10"
                         />
@@ -194,7 +114,7 @@ export default function JobScraper() {
                         <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <Input
                           value={jobLocation}
-                          onChange={(e) => setJobLocation(e.target.value)}
+                          onChange={(e) => dispatch({ type: "jobs/setJobLocation", payload: e.target.value })}
                           placeholder="e.g. San Francisco"
                           className="pl-10"
                         />
@@ -223,7 +143,7 @@ export default function JobScraper() {
                           <Calendar
                             mode="single"
                             selected={datePosted}
-                            onSelect={setDatePosted}
+                            onSelect={(date) => dispatch({ type: "jobs/setDatePosted", payload: date })}
                             initialFocus
                           />
                         </PopoverContent>
@@ -279,19 +199,17 @@ export default function JobScraper() {
                 ))}
               </div>
             ) : jobs.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {jobs.map((job, index) => (
-                    <JobCard
-                      key={job._id}
-                      job={job}
-                      index={index}
-                      jobs={jobs}
-                      lastJobElementRef={lastJobElementRef}
-                    />
-                  ))}
-                </div>
-              </>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {jobs.map((job, index) => (
+                  <JobCard
+                    key={job._id}
+                    job={job}
+                    index={index}
+                    jobs={jobs}
+                    lastJobElementRef={lastJobElementRef}
+                  />
+                ))}
+              </div>
             ) : (
               <div className="text-center py-12">
                 <p className="text-gray-600">

@@ -18,11 +18,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { dateOptions, experienceOptions } from "@/constant/dropdata";
 import { useState } from "react";
-// import useAuth from "@/hooks/useAuth";
+import useAuth from "@/hooks/useAuth";
+
 
 import { toast } from "react-toastify";
 
 export default function JobTabs() {
+
+
   const [formData, setFormData] = useState({
     title: "",
     location: "",
@@ -40,6 +43,8 @@ export default function JobTabs() {
     autoExperienceLevel: "",
     autoDatePosted: 24,
   });
+
+  // useAuth()
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
