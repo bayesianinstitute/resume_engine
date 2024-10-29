@@ -2,7 +2,11 @@
 "use client";
 import { useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchJobs} from "../../lib/store/features/job/jobSearch";
+import {
+  clearSearch,
+  fetchJobs,
+  searchJobs,
+} from "../../lib/store/features/job/jobSearch";
 import { RootState, AppDispatch } from "../../lib/store/store";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -10,19 +14,28 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import JobCard from "@/components/ui/jobCard";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import Sidebar from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import { Briefcase, Calendar as CalendarIcon, MapPin, Search } from "lucide-react";
+import {
+  Briefcase,
+  Calendar as CalendarIcon,
+  MapPin,
+  Search,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-// import { toast } from "react-toastify";
+import { toast } from "react-toastify";
 
 export default function JobScraper() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const observer = useRef<IntersectionObserver | null>(null);
-  
+
   const {
     jobs,
     totalJobs,
@@ -44,37 +57,53 @@ export default function JobScraper() {
     dispatch(fetchJobs(1));
   }, [dispatch, router]);
 
-  const handleSearch = (event: React.FormEvent) => {
+  const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
-    dispatch(searchJobs({ jobTitle, jobLocation, datePosted }));
+
+    try {
+      await dispatch(
+        searchJobs({ jobTitle, jobLocation, datePosted })
+      ).unwrap();
+    } catch (error) {
+      toast({
+        title: "Search Failed",
+        description: "Unable to perform search. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleClearSearch = () => {
     dispatch(clearSearch());
-    dispatch(fetchJobs(1));
   };
+  const totalPages = Math.ceil(totalJobs / 10); // Assuming 10 jobs per page
 
+  const handlePageChange = (page: number) => {
+    if (page !== currentPage) {
+      dispatch(fetchJobs(page));  // Fetch only the jobs for the new page
+    }
+  };
+  
+  // Infinite scroll
   const lastJobElementRef = useCallback(
     (node) => {
       if (loading) return;
       if (observer.current) observer.current.disconnect();
       observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && currentPage < Math.ceil(totalJobs / 10)) {
+        if (entries[0].isIntersecting && currentPage < totalPages) {
           dispatch(fetchJobs(currentPage + 1));
         }
       });
       if (node) observer.current.observe(node);
     },
-    [loading, currentPage, totalJobs, dispatch]
+    [loading, currentPage, totalPages, dispatch]
   );
+  
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>{error}</div>;
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
-
       <div className="flex-1 ml-64">
         <div className="p-8">
           <div className="max-w-6xl mx-auto space-y-8">
@@ -99,7 +128,12 @@ export default function JobScraper() {
                         <Briefcase className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <Input
                           value={jobTitle}
-                          onChange={(e) => dispatch({ type: "jobs/setJobTitle", payload: e.target.value })}
+                          onChange={(e) =>
+                            dispatch({
+                              type: "jobs/setJobTitle",
+                              payload: e.target.value,
+                            })
+                          }
                           placeholder="e.g. Data Scientist"
                           className="pl-10"
                         />
@@ -114,7 +148,12 @@ export default function JobScraper() {
                         <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <Input
                           value={jobLocation}
-                          onChange={(e) => dispatch({ type: "jobs/setJobLocation", payload: e.target.value })}
+                          onChange={(e) =>
+                            dispatch({
+                              type: "jobs/setJobLocation",
+                              payload: e.target.value,
+                            })
+                          }
                           placeholder="e.g. San Francisco"
                           className="pl-10"
                         />
@@ -143,7 +182,12 @@ export default function JobScraper() {
                           <Calendar
                             mode="single"
                             selected={datePosted}
-                            onSelect={(date) => dispatch({ type: "jobs/setDatePosted", payload: date })}
+                            onSelect={(date) =>
+                              dispatch({
+                                type: "jobs/setDatePosted",
+                                payload: date,
+                              })
+                            }
                             initialFocus
                           />
                         </PopoverContent>
@@ -169,16 +213,15 @@ export default function JobScraper() {
                         </div>
                       )}
                     </Button>
-                    {isSearching && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleClearSearch}
-                        className="w-40"
-                      >
-                        Clear Search
-                      </Button>
-                    )}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleClearSearch}
+                      className="w-40"
+                    >
+                      Clear Search
+                    </Button>
                   </div>
                 </form>
               </CardContent>
@@ -206,7 +249,9 @@ export default function JobScraper() {
                     job={job}
                     index={index}
                     jobs={jobs}
-                    lastJobElementRef={lastJobElementRef}
+                    lastJobElementRef={
+                      index === jobs.length - 1 ? lastJobElementRef : null
+                    } // Adjusted condition for last job
                   />
                 ))}
               </div>
@@ -217,6 +262,24 @@ export default function JobScraper() {
                 </p>
               </div>
             )}
+
+            {/* Pagination Controls */}
+            <div className="flex justify-center space-x-4 py-4">
+              {Array.from({ length: totalPages }, (_, index) => (
+                <Button
+                  key={index + 1}
+                  variant="outline"
+                  onClick={() => handlePageChange(index + 1)}
+                  className={`px-4 ${
+                    currentPage === index + 1
+                      ? "bg-blue-600 text-white"
+                      : "text-blue-600"
+                  }`}
+                >
+                  {index + 1}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
