@@ -8,8 +8,10 @@ import { SkillProgress } from "../models/skill.js";
 import { genAIModel, openai } from "../utils/chatAI.js";
 import { ObjectId } from 'mongodb';
 // import { PDFLoader } from 'pdf-loader-library';
-
+import { fileURLToPath } from "url";
 import { Job } from "../models/jobTracker.js";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const matcher = async (req, res) => {
   const jobDescription = req.body.jobDescription;
@@ -67,14 +69,27 @@ export const stats = async (req, res) => {
     return res.status(400).json({ error: "Resume file is required." });
   }
 
-  const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-resume.pdf`);
+  // Define the uploads directory inside the `server` folder
+  const uploadsDir = path.join(__dirname, "../uploads");
+
+  // Create the directory if it doesn't exist
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  // Create a unique filename for the resume
+  const resumeFileName = `${userId}-${Date.now()}-resume.pdf`;
+  const resumeFilePath = path.join(uploadsDir, resumeFileName);
+
+  // Store only the relative path from the `uploads` directory
+  const relativePath = path.join("uploads", resumeFileName);
 
   try {
-    // Write the resume to a temporary file
-    fs.writeFileSync(tempFilePath, resumeFile.buffer);
+    // Write the resume to the defined file path
+    fs.writeFileSync(resumeFilePath, resumeFile.buffer);
 
     // Load and extract text from the resume PDF
-    const pdfLoader = new PDFLoader(tempFilePath);
+    const pdfLoader = new PDFLoader(resumeFilePath);
     const resumeDocs = await pdfLoader.load();
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
@@ -85,13 +100,13 @@ export const stats = async (req, res) => {
     const formattedStrengths = strengths.map((point) => ({ point }));
     const formattedWeaknesses = weaknesses.map((point) => ({ point }));
 
-    // Store the resume data in the database
+    // Store the relative path and analysis data in the database
     const resumeRecord = await Resume.findOneAndUpdate(
       { userId },
       {
         $push: {
           resumes: {
-            resume: resumeFile.buffer,
+            resume: relativePath, // Store only the relative path
             strengths: formattedStrengths,
             weaknesses: formattedWeaknesses,
             skills: skills.map((skill) => ({
@@ -112,9 +127,32 @@ export const stats = async (req, res) => {
   } catch (error) {
     console.error("Error processing resume:", error);
     res.status(500).json({ error: "An error occurred while processing the resume." });
-  } finally {
-    // Clean up the temporary file
-    fs.unlinkSync(tempFilePath);
+  }
+};
+
+export const resumeview = async (req, res) => {
+  const { userId, fileName } = req.params;
+
+  try {
+    // Define the base directory for resume uploads
+    const relativeUploadsDir = `uploads`; // Adjusted to point to "uploads" directory in root
+    const resumeFilePath = path.join(process.cwd(), relativeUploadsDir, fileName); // Full path
+
+    // Check if the file exists
+    if (fs.existsSync(resumeFilePath)) {
+      // Set headers to prompt file download
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+
+      // Stream the file to the response
+      fs.createReadStream(resumeFilePath).pipe(res);
+    } else {
+      // Send a 404 response if the file does not exist
+      res.status(404).json({ error: "File not found" });
+    }
+  } catch (error) {
+    console.error("Error serving resume:", error);
+    res.status(500).json({ error: "An error occurred while fetching the resume file." });
   }
 };
 
@@ -144,7 +182,7 @@ export const getAllResumes = async (req, res) => {
       weaknesses: resume.weaknesses.map((w) => w.point), // Extract points for response
       skills: resume.skills,
       uploadedAt: resume.uploadedAt,
-      resumeContent: resume.resume.toString('base64'), // Convert Buffer to base64 for display
+      resume: resume.resume, // Include the path to the resume PDF
     }));
 
     res.status(200).json({
@@ -159,6 +197,7 @@ export const getAllResumes = async (req, res) => {
     });
   }
 };
+
 
 // Helper function to get embeddings for text chunks
 async function getEmbeddingsForChunks(chunks) {

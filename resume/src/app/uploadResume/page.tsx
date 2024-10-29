@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Upload, CheckCircle, XCircle, Eye } from "lucide-react"; // Import Eye icon for view button
+import { Upload, CheckCircle, XCircle, Download } from "lucide-react"; // Import Download icon
 import Sidebar from "@/components/ui/sidebar";
 import Modal from "@/components/ui/modal";
 
@@ -21,7 +21,7 @@ interface Skill {
 }
 
 interface Resume {
-  resume: string; // Base64-encoded string of the PDF data
+  resume: string; // File path to the PDF resume
   strengths: Array<StrengthOrWeakness | string>;
   weaknesses: Array<StrengthOrWeakness | string>;
   skills: Skill[];
@@ -141,26 +141,16 @@ export default function ResumeViewer() {
 
   const handleCloseModal = () => setSelectedResume(null);
 
-  const handleViewResume = () => {
+  const handleDownloadResume = () => {
     if (selectedResume && selectedResume.resume) {
-      // Convert Base64 string to binary buffer
-      console.log("selectedResume.resume",selectedResume.resume)
-      const byteCharacters = atob(selectedResume.resume); // Decode Base64 string
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-  
-      // Create a blob and URL for the PDF
-      const blob = new Blob([byteArray], { type: "application/pdf" });
-      const blobUrl = URL.createObjectURL(blob);
-  
-      // Open the PDF in a new tab
-      window.open(blobUrl);
+      // Assuming `resume` contains the relative path "uploads/resumes/fileName.pdf"
+      const fileName = selectedResume.resume.split("/").pop(); // Get the file name only
+
+      // Download link to backend download API
+      const fileUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/resume/view/${fileName}`;
+      window.open(fileUrl, "_blank"); // Open the URL in a new tab to trigger download
     }
   };
-  
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -231,9 +221,7 @@ export default function ResumeViewer() {
                       <ul className="list-disc list-inside">
                         {selectedResume.strengths.map((strength, index) => (
                           <li key={index} className="text-gray-600">
-                            {strength && typeof strength === "object" && "point" in strength
-                              ? strength.point
-                              : strength || "No data available"}
+                            {typeof strength === "object" && "point" in strength ? strength.point : strength}
                           </li>
                         ))}
                       </ul>
@@ -248,9 +236,7 @@ export default function ResumeViewer() {
                       <ul className="list-disc list-inside">
                         {selectedResume.weaknesses.map((weakness, index) => (
                           <li key={index} className="text-gray-600">
-                            {weakness && typeof weakness === "object" && "point" in weakness
-                              ? weakness.point
-                              : weakness || "No data available"}
+                            {typeof weakness === "object" && "point" in weakness ? weakness.point : weakness}
                           </li>
                         ))}
                       </ul>
@@ -268,13 +254,12 @@ export default function ResumeViewer() {
                     ))}
                   </ul>
 
-                  {/* View Resume Button */}
                   <Button
-                    onClick={handleViewResume}
+                    onClick={handleDownloadResume}
                     className="mt-6 bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center"
                   >
-                    <Eye className="w-5 h-5 mr-2" />
-                    View Resume
+                    <Download className="w-5 h-5 mr-2" />
+                    Download Resume
                   </Button>
                 </div>
               </div>

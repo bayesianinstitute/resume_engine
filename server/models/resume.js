@@ -9,7 +9,7 @@ const resumeSchema = new mongoose.Schema({
   resumes: [
     {
       resume: {
-        type: Buffer, // Store PDF data as a Buffer
+        type: String, // Store PDF data as a Buffer
         required: true,
       },
       strengths: [
