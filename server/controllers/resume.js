@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { Resume } from "../models/resume.js";
+import { Joblist } from "../models/jobModel.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
 import { genAIModel, openai } from "../utils/chatAI.js";
@@ -14,22 +15,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const matcher = async (req, res) => {
-  const jobDescription = req.body.jobDescription;
-  const resumeFile = req.file;
+  const { resumeEntryId, jobId } = req.body;
   const fitThreshold = 70; // Define threshold here
 
-  if (!resumeFile || !jobDescription) {
+  if (!resumeEntryId || !jobId) {
     return res
       .status(400)
-      .json({ error: "Resume file and job description are required." });
+      .json({ error: "Resume entry ID and Job ID are required." });
   }
 
-  const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-resume.pdf`);
-
   try {
-    fs.writeFileSync(tempFilePath, resumeFile.buffer);
+    // Find the resume entry within the `resumes` array
+    const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
+    if (!resumeData) {
+      return res.status(404).json({ error: "Resume entry not found." });
+    }
 
-    const pdfLoader = new PDFLoader(tempFilePath);
+    // Find the specific resume entry within the `resumes` array
+    const resumeEntry = resumeData.resumes.find((r) => r._id.toString() === resumeEntryId);
+    if (!resumeEntry) {
+      return res.status(404).json({ error: "Resume entry not found in the resumes array." });
+    }
+
+    const resumePath = resumeEntry.resume;
+
+    // Fetch job description from the database
+    const jobData = await Joblist.findById(jobId);
+    if (!jobData) {
+      return res.status(404).json({ error: "Job not found." });
+    }
+    const jobDescription = jobData.description;
+
+    // Load and extract text from the resume PDF
+    const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
     const resumeDocs = await pdfLoader.load();
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
@@ -56,8 +74,6 @@ export const matcher = async (req, res) => {
     res
       .status(500)
       .json({ error: "An error occurred while processing the resume match." });
-  } finally {
-    fs.unlinkSync(tempFilePath);
   }
 };
 
