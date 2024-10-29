@@ -11,6 +11,7 @@ import { ObjectId } from 'mongodb';
 // import { PDFLoader } from 'pdf-loader-library';
 import { fileURLToPath } from "url";
 import { Job } from "../models/jobTracker.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -76,6 +77,86 @@ export const matcher = async (req, res) => {
       .json({ error: "An error occurred while processing the resume match." });
   }
 };
+
+export const bulkMatcher = async (req, res) => {
+  const { resumeIds, jobId } = req.body;
+  const fitThreshold = 70;
+
+  if (!resumeIds || !Array.isArray(resumeIds) || resumeIds.length === 0 || !jobId) {
+    return res.status(400).json({ error: "An array of resume IDs and a job ID are required." });
+  }
+
+  try {
+    // Retrieve job description
+    const jobDocument = await Joblist.findById(jobId);
+    if (!jobDocument) {
+      return res.status(404).json({ error: "Job description not found." });
+    }
+    const jobDescription = jobDocument.description;
+    const jobCompany = jobDocument.company;
+
+    // Store results for CSV
+    const results = [];
+
+    // Process each resume
+    for (const resumeId of resumeIds) {
+      const resumeDocument = await Resume.findOne({ "resumes._id": resumeId }, { "resumes.$": 1 });
+      if (!resumeDocument) {
+        console.warn(`Resume with ID ${resumeId} not found.`);
+        continue; // Skip if resume not found
+      }
+
+      const resumePath = resumeDocument.resumes[0].resume;
+      const resumeText = fs.readFileSync(path.resolve(resumePath), 'utf-8');
+
+      // Evaluate the resume with the job description
+      const { evaluationText, score } = await getLLMEvaluation(resumeText, jobDescription, fitThreshold);
+
+      // Parse necessary fields (replace with actual data extraction logic as needed)
+      const parsedResult = {
+        'First Name': 'N/A', // Replace with actual parsing logic
+        'Last Name': 'N/A',  // Replace with actual parsing logic
+        'Location': 'N/A',   // Replace with actual parsing logic
+        'Designation': 'N/A', // Replace with actual parsing logic
+        'Email': 'N/A',       // Replace with actual parsing logic
+        'Phone': 'N/A',       // Replace with actual parsing logic
+        'Recommendation': score >= fitThreshold ? `Good fit with ${score}%` : `Not a perfect fit. ${evaluationText}`,
+        'Score': score || 'N/A',
+        'Job Company': jobCompany
+      };
+
+      results.push(parsedResult);
+    }
+
+    // Convert results to CSV
+    const csvFields = [
+      { id: 'First Name', title: 'First Name' },
+      { id: 'Last Name', title: 'Last Name' },
+      { id: 'Location', title: 'Location' },
+      { id: 'Designation', title: 'Designation' },
+      { id: 'Email', title: 'Email' },
+      { id: 'Phone', title: 'Phone' },
+      { id: 'Recommendation', title: 'Recommendation' },
+      { id: 'Score', title: 'Score' },
+      { id: 'Job Company', title: 'Job Company' }
+    ];
+    const parser = new Parser({ fields: csvFields.map(field => field.id) });
+    const csv = parser.parse(results);
+
+    // Write CSV to file
+    const csvFilePath = path.join(__dirname, '../../uploads', `report-${Date.now()}.csv`);
+    fs.writeFileSync(csvFilePath, csv);
+
+    res.status(200).json({ message: 'Report generated successfully', csvUrl: `${req.protocol}://${req.get('host')}/uploads/${path.basename(csvFilePath)}` });
+  } catch (error) {
+    console.error("Error processing resumes:", error);
+    res.status(500).json({ error: "An error occurred while processing the resumes." });
+  }
+};
+
+
+
+
 
 export const stats = async (req, res) => {
   const resumeFile = req.file;
