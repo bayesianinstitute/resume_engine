@@ -53,11 +53,14 @@ export const matcher = async (req, res) => {
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
     // Pass fitThreshold to getLLMEvaluation
-    const { evaluationText, score } = await getLLMEvaluation(
-      resumeText,
-      jobDescription,
-      fitThreshold
-    );
+    // const { evaluationText, score } = await getLLMEvaluation(
+    //   resumeText,
+    //   jobDescription,
+    //   fitThreshold
+    // );
+
+    const evaluationText = "Consider adding more keywords related to the job requirements.";
+    const score = 75; // Sample score, you can adjust this value as needed
 
     let resultMessage;
     if (score !== null && score >= fitThreshold) {
@@ -108,20 +111,20 @@ export const bulkMatcher = async (req, res) => {
 
       const resumePath = resumeDocument.resumes[0].resume;
       const resumeText = fs.readFileSync(path.resolve(resumePath), 'utf-8');
+      
+      // Call getLLMEvaluationStats to evaluate the resume
+      const evaluationResult = await getLLMEvaluationMatcher(resumeText, jobCompany, fitThreshold);
 
-      // Evaluate the resume with the job description
-      const { evaluationText, score } = await getLLMEvaluation(resumeText, jobDescription, fitThreshold);
-
-      // Parse necessary fields (replace with actual data extraction logic as needed)
       const parsedResult = {
-        'First Name': 'N/A', // Replace with actual parsing logic
-        'Last Name': 'N/A',  // Replace with actual parsing logic
-        'Location': 'N/A',   // Replace with actual parsing logic
-        'Designation': 'N/A', // Replace with actual parsing logic
-        'Email': 'N/A',       // Replace with actual parsing logic
-        'Phone': 'N/A',       // Replace with actual parsing logic
-        'Recommendation': score >= fitThreshold ? `Good fit with ${score}%` : `Not a perfect fit. ${evaluationText}`,
-        'Score': score || 'N/A',
+        'Resume ID': resumeId,
+        'First Name': evaluationResult.firstName,
+        'Last Name': evaluationResult.lastName,
+        'Location': evaluationResult.location,
+        'Designation': evaluationResult.designation,
+        'Email': evaluationResult.email,
+        'Phone': evaluationResult.phone,
+        'Recommendation': evaluationResult.recommendation,
+        'Score': evaluationResult.score,
         'Job Company': jobCompany
       };
 
@@ -130,6 +133,7 @@ export const bulkMatcher = async (req, res) => {
 
     // Convert results to CSV
     const csvFields = [
+      { id: 'Resume ID', title: 'Resume ID' },
       { id: 'First Name', title: 'First Name' },
       { id: 'Last Name', title: 'Last Name' },
       { id: 'Location', title: 'Location' },
@@ -153,6 +157,7 @@ export const bulkMatcher = async (req, res) => {
     res.status(500).json({ error: "An error occurred while processing the resumes." });
   }
 };
+
 
 
 
@@ -451,6 +456,117 @@ export async function getLLMEvaluationStats(resumeText) {
   } catch (error) {
     console.error("Error fetching LLM evaluation:", error);
     return {
+      strengths: ["Unable to retrieve strengths."],
+      weaknesses: ["Unable to retrieve weaknesses."],
+      skills: [{ skillName: "Error fetching skills", skillLevel: 0 }],
+    };
+  }
+}
+
+export async function getLLMEvaluationMatcher(resumeText, jobCompany, fitThreshold = 70) {
+  const prompt = `
+    You are an expert career coach and resume evaluator. Based on the following resume, analyze the person's strengths, weaknesses, and provide numeric skill proficiency levels (out of 100) for technical skills mentioned in the resume. Extract key personal information and evaluate the fit for a role based on the job description.
+
+    Provide the following details based on the resume:
+
+    - **First Name**: (If available)
+    - **Last Name**: (If available)
+    - **Location**: (If available)
+    - **Designation**: (Current job title or designation if mentioned)
+    - **Email**: (If available)
+    - **Phone**: (If available)
+    - **Recommendation**: Based on fit, provide a recommendation message.
+    - **Score**: Numeric score for job fit out of 100.
+
+    Additionally, evaluate the following:
+    
+    1. **Strengths**: A list of strengths based on the resume content.
+    2. **Weaknesses**: A list of weaknesses or areas where improvement is needed.
+    3. **Skills and Proficiency**: Assign a numeric value out of 100 for each relevant technical skill (e.g., Python, React, SQL, Machine Learning).
+
+    Resume Content:
+    ${resumeText}
+
+    Your response format should be:
+
+    - **First Name**: [first name or "N/A"]
+    - **Last Name**: [last name or "N/A"]
+    - **Location**: [location or "N/A"]
+    - **Designation**: [designation or "N/A"]
+    - **Email**: [email or "N/A"]
+    - **Phone**: [phone or "N/A"]
+    - **Recommendation**: [recommendation based on score]
+    - **Score**: [numeric score]
+
+    Followed by:
+
+    - **Strengths**: [list of strengths]
+    - **Weaknesses**: [list of weaknesses]
+    - **Skills and Proficiency**: [skill1: proficiency, skill2: proficiency, skill3: proficiency, ...]
+  `;
+
+  try {
+    const chatSession = genAIModel.startChat({
+      history: [],
+    });
+
+    const result = await chatSession.sendMessage(prompt);
+
+    const response = result.response.text();
+
+    // Extract each field from the response using regex
+    const firstName = response.match(/(?<=\*\*First Name\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
+    const lastName = response.match(/(?<=\*\*Last Name\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
+    const location = response.match(/(?<=\*\*Location\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
+    const designation = response.match(/(?<=\*\*Designation\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
+    const email = response.match(/(?<=\*\*Email\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
+    const phone = response.match(/(?<=\*\*Phone\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
+    const recommendation = response.match(/(?<=\*\*Recommendation\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'No recommendation provided.';
+    const score = parseInt(response.match(/(?<=\*\*Score\*\*:\s*)(\d+)/i)?.[0], 10) || 'N/A';
+
+    // Parse strengths, weaknesses, and skills as before
+    const strengthsMatch = response.match(/(?<=\*\*Strengths\*\*:\s*)([\s\S]+?)(?=\*\*Weaknesses\*\*:)/i);
+    const weaknessesMatch = response.match(/(?<=\*\*Weaknesses\*\*:\s*)([\s\S]+?)(?=\*\*Skills and Proficiency\*\*:)/i);
+    const skillsMatch = response.match(/(?<=\*\*Skills and Proficiency\*\*:\s*)([\s\S]+)/i);
+
+    const strengths = strengthsMatch ? strengthsMatch[0].split(/\s*-\s+/).filter((s) => s.trim()) : ["No specific strengths identified."];
+    const weaknesses = weaknessesMatch ? weaknessesMatch[0].split(/\s*-\s+/).filter((w) => w.trim()) : ["No specific weaknesses identified."];
+    const skills = skillsMatch
+      ? skillsMatch[0]
+          .split(/\n+/)
+          .map((skill) => {
+            const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/);
+            return match ? { skillName: match[1].trim(), skillLevel: parseInt(match[2], 10) } : null;
+          })
+          .filter(Boolean)
+      : [{ skillName: "No skills identified", skillLevel: 0 }];
+
+    return {
+      firstName,
+      lastName,
+      location,
+      designation,
+      email,
+      phone,
+      recommendation,
+      score,
+      jobCompany,
+      strengths,
+      weaknesses,
+      skills,
+    };
+  } catch (error) {
+    console.error("Error fetching LLM evaluation:", error);
+    return {
+      firstName: "N/A",
+      lastName: "N/A",
+      location: "N/A",
+      designation: "N/A",
+      email: "N/A",
+      phone: "N/A",
+      recommendation: "Unable to retrieve recommendation.",
+      score: "N/A",
+      jobCompany,
       strengths: ["Unable to retrieve strengths."],
       weaknesses: ["Unable to retrieve weaknesses."],
       skills: [{ skillName: "Error fetching skills", skillLevel: 0 }],
