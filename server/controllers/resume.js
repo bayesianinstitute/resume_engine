@@ -3,31 +3,52 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { Resume } from "../models/resume.js";
+import { Joblist } from "../models/jobModel.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
 import { genAIModel, openai } from "../utils/chatAI.js";
 import { ObjectId } from 'mongodb';
 // import { PDFLoader } from 'pdf-loader-library';
-
+import { fileURLToPath } from "url";
 import { Job } from "../models/jobTracker.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 export const matcher = async (req, res) => {
-  const jobDescription = req.body.jobDescription;
-  const resumeFile = req.file;
+  const { resumeEntryId, jobId } = req.body;
   const fitThreshold = 70; // Define threshold here
 
-  if (!resumeFile || !jobDescription) {
+  if (!resumeEntryId || !jobId) {
     return res
       .status(400)
-      .json({ error: "Resume file and job description are required." });
+      .json({ error: "Resume entry ID and Job ID are required." });
   }
 
-  const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-resume.pdf`);
-
   try {
-    fs.writeFileSync(tempFilePath, resumeFile.buffer);
+    // Find the resume entry within the `resumes` array
+    const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
+    if (!resumeData) {
+      return res.status(404).json({ error: "Resume entry not found." });
+    }
 
-    const pdfLoader = new PDFLoader(tempFilePath);
+    // Find the specific resume entry within the `resumes` array
+    const resumeEntry = resumeData.resumes.find((r) => r._id.toString() === resumeEntryId);
+    if (!resumeEntry) {
+      return res.status(404).json({ error: "Resume entry not found in the resumes array." });
+    }
+
+    const resumePath = resumeEntry.resume;
+
+    // Fetch job description from the database
+    const jobData = await Joblist.findById(jobId);
+    if (!jobData) {
+      return res.status(404).json({ error: "Job not found." });
+    }
+    const jobDescription = jobData.description;
+
+    // Load and extract text from the resume PDF
+    const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
     const resumeDocs = await pdfLoader.load();
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
@@ -54,10 +75,88 @@ export const matcher = async (req, res) => {
     res
       .status(500)
       .json({ error: "An error occurred while processing the resume match." });
-  } finally {
-    fs.unlinkSync(tempFilePath);
   }
 };
+
+export const bulkMatcher = async (req, res) => {
+  const { resumeIds, jobId } = req.body;
+  const fitThreshold = 70;
+
+  if (!resumeIds || !Array.isArray(resumeIds) || resumeIds.length === 0 || !jobId) {
+    return res.status(400).json({ error: "An array of resume IDs and a job ID are required." });
+  }
+
+  try {
+    // Retrieve job description
+    const jobDocument = await Joblist.findById(jobId);
+    if (!jobDocument) {
+      return res.status(404).json({ error: "Job description not found." });
+    }
+    const jobDescription = jobDocument.description;
+    const jobCompany = jobDocument.company;
+
+    // Store results for CSV
+    const results = [];
+
+    // Process each resume
+    for (const resumeId of resumeIds) {
+      const resumeDocument = await Resume.findOne({ "resumes._id": resumeId }, { "resumes.$": 1 });
+      if (!resumeDocument) {
+        console.warn(`Resume with ID ${resumeId} not found.`);
+        continue; // Skip if resume not found
+      }
+
+      const resumePath = resumeDocument.resumes[0].resume;
+      const resumeText = fs.readFileSync(path.resolve(resumePath), 'utf-8');
+
+      // Evaluate the resume with the job description
+      const { evaluationText, score } = await getLLMEvaluation(resumeText, jobDescription, fitThreshold);
+
+      // Parse necessary fields (replace with actual data extraction logic as needed)
+      const parsedResult = {
+        'First Name': 'N/A', // Replace with actual parsing logic
+        'Last Name': 'N/A',  // Replace with actual parsing logic
+        'Location': 'N/A',   // Replace with actual parsing logic
+        'Designation': 'N/A', // Replace with actual parsing logic
+        'Email': 'N/A',       // Replace with actual parsing logic
+        'Phone': 'N/A',       // Replace with actual parsing logic
+        'Recommendation': score >= fitThreshold ? `Good fit with ${score}%` : `Not a perfect fit. ${evaluationText}`,
+        'Score': score || 'N/A',
+        'Job Company': jobCompany
+      };
+
+      results.push(parsedResult);
+    }
+
+    // Convert results to CSV
+    const csvFields = [
+      { id: 'First Name', title: 'First Name' },
+      { id: 'Last Name', title: 'Last Name' },
+      { id: 'Location', title: 'Location' },
+      { id: 'Designation', title: 'Designation' },
+      { id: 'Email', title: 'Email' },
+      { id: 'Phone', title: 'Phone' },
+      { id: 'Recommendation', title: 'Recommendation' },
+      { id: 'Score', title: 'Score' },
+      { id: 'Job Company', title: 'Job Company' }
+    ];
+    const parser = new Parser({ fields: csvFields.map(field => field.id) });
+    const csv = parser.parse(results);
+
+    // Write CSV to file
+    const csvFilePath = path.join(__dirname, '../../uploads', `report-${Date.now()}.csv`);
+    fs.writeFileSync(csvFilePath, csv);
+
+    res.status(200).json({ message: 'Report generated successfully', csvUrl: `${req.protocol}://${req.get('host')}/uploads/${path.basename(csvFilePath)}` });
+  } catch (error) {
+    console.error("Error processing resumes:", error);
+    res.status(500).json({ error: "An error occurred while processing the resumes." });
+  }
+};
+
+
+
+
 
 export const stats = async (req, res) => {
   const resumeFile = req.file;
@@ -67,14 +166,27 @@ export const stats = async (req, res) => {
     return res.status(400).json({ error: "Resume file is required." });
   }
 
-  const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-resume.pdf`);
+  // Define the uploads directory inside the `server` folder
+  const uploadsDir = path.join(__dirname, "../uploads");
+
+  // Create the directory if it doesn't exist
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  // Create a unique filename for the resume
+  const resumeFileName = `${userId}-${Date.now()}-resume.pdf`;
+  const resumeFilePath = path.join(uploadsDir, resumeFileName);
+
+  // Store only the relative path from the `uploads` directory
+  const relativePath = path.join("uploads", resumeFileName);
 
   try {
-    // Write the resume to a temporary file
-    fs.writeFileSync(tempFilePath, resumeFile.buffer);
+    // Write the resume to the defined file path
+    fs.writeFileSync(resumeFilePath, resumeFile.buffer);
 
     // Load and extract text from the resume PDF
-    const pdfLoader = new PDFLoader(tempFilePath);
+    const pdfLoader = new PDFLoader(resumeFilePath);
     const resumeDocs = await pdfLoader.load();
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
@@ -85,13 +197,13 @@ export const stats = async (req, res) => {
     const formattedStrengths = strengths.map((point) => ({ point }));
     const formattedWeaknesses = weaknesses.map((point) => ({ point }));
 
-    // Store the resume data in the database
+    // Store the relative path and analysis data in the database
     const resumeRecord = await Resume.findOneAndUpdate(
       { userId },
       {
         $push: {
           resumes: {
-            resume: resumeFile.buffer,
+            resume: relativePath, // Store only the relative path
             strengths: formattedStrengths,
             weaknesses: formattedWeaknesses,
             skills: skills.map((skill) => ({
@@ -112,9 +224,32 @@ export const stats = async (req, res) => {
   } catch (error) {
     console.error("Error processing resume:", error);
     res.status(500).json({ error: "An error occurred while processing the resume." });
-  } finally {
-    // Clean up the temporary file
-    fs.unlinkSync(tempFilePath);
+  }
+};
+
+export const resumeview = async (req, res) => {
+  const { userId, fileName } = req.params;
+
+  try {
+    // Define the base directory for resume uploads
+    const relativeUploadsDir = `uploads`; // Adjusted to point to "uploads" directory in root
+    const resumeFilePath = path.join(process.cwd(), relativeUploadsDir, fileName); // Full path
+
+    // Check if the file exists
+    if (fs.existsSync(resumeFilePath)) {
+      // Set headers to prompt file download
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+
+      // Stream the file to the response
+      fs.createReadStream(resumeFilePath).pipe(res);
+    } else {
+      // Send a 404 response if the file does not exist
+      res.status(404).json({ error: "File not found" });
+    }
+  } catch (error) {
+    console.error("Error serving resume:", error);
+    res.status(500).json({ error: "An error occurred while fetching the resume file." });
   }
 };
 
@@ -144,7 +279,7 @@ export const getAllResumes = async (req, res) => {
       weaknesses: resume.weaknesses.map((w) => w.point), // Extract points for response
       skills: resume.skills,
       uploadedAt: resume.uploadedAt,
-      resumeContent: resume.resume.toString('base64'), // Convert Buffer to base64 for display
+      resume: resume.resume, // Include the path to the resume PDF
     }));
 
     res.status(200).json({
@@ -159,6 +294,7 @@ export const getAllResumes = async (req, res) => {
     });
   }
 };
+
 
 // Helper function to get embeddings for text chunks
 async function getEmbeddingsForChunks(chunks) {
