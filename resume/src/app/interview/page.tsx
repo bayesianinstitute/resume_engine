@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, {  useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Loader2, BookOpen, List, MessageSquare } from "lucide-react";
 import Sidebar from "@/components/ui/sidebar";
+import { useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
+import { setJobDescription, setLoading, setPrepResources } from "@/lib/store/features/job/jobSlice";
 
 interface PrepResource {
   title: string;
@@ -22,11 +25,10 @@ interface PrepResource {
 }
 
 export default function InterviewPreparation() {
-  const [jobDescription, setJobDescription] = useState("");
-  
-  const [prepResources, setPrepResources] = useState<PrepResource[]>([]);
-  const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
   const router = useRouter();
+  const { jobDescription, prepResources, loading } = useSelector((state) => state.jobDescription);
+
 
   // Check for authentication
   useEffect(() => {
@@ -45,7 +47,7 @@ export default function InterviewPreparation() {
     }
 
     try {
-      setLoading(true);
+      dispatch(setLoading(true));
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/resume/preparation`,
@@ -68,14 +70,14 @@ export default function InterviewPreparation() {
         data.preparationResources
       );
 
-      setPrepResources(prepResources);
+      dispatch(setPrepResources(prepResources));
     } catch (error) {
       console.error("Error:", error);
       alert(
         "An error occurred while generating interview preparation resources."
       );
     } finally {
-      setLoading(false);
+      dispatch(setLoading(false));
     }
   };
 
@@ -178,7 +180,7 @@ export default function InterviewPreparation() {
                       id="jobDescription"
                       placeholder="Paste the job description here..."
                       value={jobDescription}
-                      onChange={(e) => setJobDescription(e.target.value)}
+                      onChange={(e) => dispatch(setJobDescription(e.target.value))}
                       rows={5}
                       className="w-full border-gray-300 rounded-md focus:ring focus:ring-blue-200 focus:border-blue-400"
                     />

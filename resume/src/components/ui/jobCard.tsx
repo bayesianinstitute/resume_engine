@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { Clock, Link, MapPin } from "lucide-react";
 import { useRouter } from "next/router";
 import { setJobDescription } from "@/lib/slice/jobSlice";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 
 interface Job {
   title: string;
@@ -25,10 +25,12 @@ interface JobCardProps {
 const JobCard = ({ job, index, jobs, lastJobElementRef }: JobCardProps) => {
   // const router = useRouter();
   // const dispatch = useAppDispatch();
-  // const jobDescription = useAppSelector((state) => state.job.jobDescription); // Use selector
+  // const { jobDescription, prepResources, loading } = useSelector((state) => state.jobDescription);
+
 
 
   const handleInterviewPrepClick = () => {
+    // dispatch(setJobDescription)
     // dispatch(setJobDescription(job.description)); // Dispatch job description
     // console.log(jobDescription)
     // router.push("/interview-preparation");
