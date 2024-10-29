@@ -8,6 +8,8 @@ import {
   List,
   Upload,
   LogOut,
+  Search,
+  PlusCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -74,8 +76,16 @@ const Sidebar = () => {
             href="/job"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
           >
-            <List className="w-5 h-5" />
-            <span>Job List</span>
+            <PlusCircle className="w-5 h-5" />
+            {/* <List className="w-5 h-5" /> */}
+            <span>Add Job</span>
+          </Link>
+          <Link
+            href="/searchjob"
+            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
+          >
+            <Search className="w-5 h-5" />
+            <span>Search Job</span>
           </Link>
           <Link
             href="/jobtracker"

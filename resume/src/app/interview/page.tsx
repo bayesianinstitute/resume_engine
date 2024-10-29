@@ -23,6 +23,7 @@ interface PrepResource {
 
 export default function InterviewPreparation() {
   const [jobDescription, setJobDescription] = useState("");
+  
   const [prepResources, setPrepResources] = useState<PrepResource[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();

@@ -1,0 +1,3 @@
+interface scrapeapi{
+    message: string
+}
