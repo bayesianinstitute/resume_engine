@@ -12,9 +12,13 @@ import {
   PlusCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/lib/store/store";
+import { clearToken } from "@/lib/store/features/user/user";
 
 const Sidebar = () => {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
 
   const onLogout = async () => {
     try {
@@ -30,7 +34,7 @@ const Sidebar = () => {
       }
       const data = await response.json();
       console.log(data.message);
-      localStorage.removeItem("token");
+      dispatch(clearToken())
       toast.success("Logged out successfully");
       router.push("/login");
     } catch (error) {
@@ -51,6 +55,7 @@ const Sidebar = () => {
       </div>
       <nav className="flex-1 flex flex-col px-4 py-6">
         <div className="space-y-2 flex-1">
+          {/*
           <Link
             href="/dashboard"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
@@ -58,7 +63,7 @@ const Sidebar = () => {
             <Briefcase className="w-5 h-5" />
             <span>Dashboard</span>
           </Link>
-          {/* <Link
+           <Link
             href="/resume"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
           >
@@ -94,13 +99,13 @@ const Sidebar = () => {
             <Search className="w-5 h-5" />
             <span>Search Job</span>
           </Link>
-          <Link
+          {/* <Link
             href="/jobtracker"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
           >
             <BarChart2 className="w-5 h-5" />
             <span>Job Tracker</span>
-          </Link>
+          </Link> */}
           <Link
             href="/uploadResume"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"

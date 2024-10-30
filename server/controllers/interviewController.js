@@ -11,9 +11,9 @@ export const generatePreparationResources = async (req, res) => {
   const prompt = `
     Based on the following job description, generate a list of key skills, potential interview questions, and preparation tips specific to this role. The output should be structured as follows:
 
-    - Key Skills: [list of key skills]
-    - Interview Questions: [list of likely interview questions]
-    - Preparation Tips: [list of preparation tips]
+    - Key Skills: [list of key skills]  - what i should prepare for this role
+    - Interview Questions: [list of likely interview questions]-  give me example interview questions
+    - Preparation Tips: [list of preparation tips] 
 
     Job Description:
     ${jobDescription}
