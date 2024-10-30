@@ -7,12 +7,11 @@ import { Joblist } from "../models/jobModel.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
 import { genAIModel, openai } from "../utils/chatAI.js";
-import { ObjectId } from 'mongodb';
+import { ObjectId } from "mongodb";
 // import { PDFLoader } from 'pdf-loader-library';
 import { fileURLToPath } from "url";
 import { Job } from "../models/jobTracker.js";
-import {JobMatching} from '../models/JobMatching.js'; // Import your JobMatching model
-
+import { JobMatching } from "../models/JobMatching.js"; // Import your JobMatching model
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,7 +65,9 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
     // If response is not valid JSON, resend the request
     if (!isValidJSON(response)) {
       console.warn("Response was not in JSON format. Resending request.");
-      response = await chatSession.sendMessage(prompt + "\n\nPlease ensure your response is in valid JSON format.");
+      response = await chatSession.sendMessage(
+        prompt + "\n\nPlease ensure your response is in valid JSON format."
+      );
       response = response.response.text().trim();
     }
 
@@ -82,85 +83,125 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   } catch (error) {
     console.error("Error fetching LLM evaluation:", error);
     return {
-      evaluationText: "Evaluation and improvement suggestions are not available.",
+      evaluationText:
+        "Evaluation and improvement suggestions are not available.",
       scores: {},
       compositeScore: null,
-      recommendation: '',
+      recommendation: "",
     };
   }
 }
 
-
-
-
-
-
-
 export const matcher = async (req, res) => {
-  const { resumeEntryId, jobId } = req.body;
+  const { resumeEntryIds, jobIds } = req.body; // Expecting arrays
   const fitThreshold = 70;
 
-  if (!resumeEntryId || !jobId) {
-    return res.status(400).json({ error: "Resume entry ID and Job ID are required." });
+  console.log(resumeEntryIds, jobIds);
+
+  // Validate input
+  if (
+    !resumeEntryIds ||
+    !jobIds ||
+    !Array.isArray(resumeEntryIds) ||
+    !Array.isArray(jobIds)
+  ) {
+    return res
+      .status(400)
+      .json({
+        error: "Resume entry IDs and Job IDs are required and must be arrays.",
+      });
   }
 
   try {
-    const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
-    if (!resumeData) return res.status(404).json({ error: "Resume entry not found." });
+    // Fetch all job data in one query
+    const jobDataArray = await Joblist.find({ _id: { $in: jobIds } });
+    if (!jobDataArray || jobDataArray.length === 0)
+      return res.status(404).json({ error: "No jobs found." });
 
-    const resumeEntry = resumeData.resumes.find((r) => r._id.toString() === resumeEntryId);
-    if (!resumeEntry) return res.status(404).json({ error: "Resume entry not found in the resumes array." });
+    const results = [];
 
-    const resumePath = resumeEntry.resume;
-    const jobData = await Joblist.findById(jobId);
-    if (!jobData) return res.status(404).json({ error: "Job not found." });
+    for (const resumeEntryId of resumeEntryIds) {
+      // Find the resume data
+      const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
+      if (!resumeData) {
+        results.push({ resumeEntryId, error: "Resume entry not found." });
+        continue;
+      }
 
-    const jobDescription = jobData.description;
-    const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
-    const resumeDocs = await pdfLoader.load();
-    const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
+      const resumeEntry = resumeData.resumes.find(
+        (r) => r._id.toString() === resumeEntryId
+      );
+      if (!resumeEntry) {
+        results.push({
+          resumeEntryId,
+          error: "Resume entry not found in the resumes array.",
+        });
+        continue;
+      }
 
-    const { evaluationText, compositeScore, scores, recommendation } = await getLLMEvaluation(
-      resumeText,
-      jobDescription,
-      fitThreshold
-    );
+      // Load resume text
+      const resumePath = resumeEntry.resume;
+      const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
+      const resumeDocs = await pdfLoader.load();
+      const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-    // Save the evaluation to JobMatching
-    const jobMatchingEntry = new JobMatching({
-      resumeEntryId,
-      jobId,
-      scores,
-      compositeScore,
-      recommendation,
-    });
-    await jobMatchingEntry.save();
+      // Iterate through each job data and evaluate
+      for (const jobData of jobDataArray) {
+        const jobDescription = jobData.description;
 
-    let resultMessage;
-    if (compositeScore !== null && compositeScore >= fitThreshold) {
-      resultMessage = `You are a good fit for this role with a score of ${compositeScore}%.`;
-    } else {
-      resultMessage = `You are not a perfect fit for this role with a score of ${compositeScore}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
+        const { evaluationText, compositeScore, scores, recommendation } =
+          await getLLMEvaluation(resumeText, jobDescription, fitThreshold);
+
+        // Save the evaluation to JobMatching
+        const jobMatchingEntry = new JobMatching({
+          resumeEntryId,
+          jobId: jobData._id,
+          scores,
+          compositeScore,
+          recommendation,
+        });
+        await jobMatchingEntry.save();
+
+        let resultMessage;
+        if (compositeScore !== null && compositeScore >= fitThreshold) {
+          resultMessage = `You are a good fit for the job ${jobData.title} with a score of ${compositeScore}%.`;
+        } else {
+          resultMessage = `You are not a perfect fit for the job ${jobData.title} with a score of ${compositeScore}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
+        }
+
+        // Push result for each job evaluated
+        results.push({
+          resumeEntryId,
+          jobId: jobData._id,
+          matchResult: resultMessage,
+          evaluationResponse: evaluationText,
+        });
+      }
     }
 
-    res.json({
-      matchResult: resultMessage,
-      evaluationResponse: evaluationText,
-    });
+    // Return all results
+    res.json({ message: "Match result", success: true, results:results });
   } catch (error) {
     console.error("Error processing resume match:", error);
-    res.status(500).json({ error: "An error occurred while processing the resume match." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while processing the resume match." });
   }
 };
-
-
 
 export const bulkMatcher = async (req, res) => {
   const { resumeIds, jobId } = req.body;
   const fitThreshold = 70;
 
-  if (!resumeIds || !Array.isArray(resumeIds) || resumeIds.length === 0 || !jobId) {
-    return res.status(400).json({ error: "An array of resume IDs and a job ID are required." });
+  if (
+    !resumeIds ||
+    !Array.isArray(resumeIds) ||
+    resumeIds.length === 0 ||
+    !jobId
+  ) {
+    return res
+      .status(400)
+      .json({ error: "An array of resume IDs and a job ID are required." });
   }
 
   try {
@@ -177,29 +218,36 @@ export const bulkMatcher = async (req, res) => {
 
     // Process each resume
     for (const resumeId of resumeIds) {
-      const resumeDocument = await Resume.findOne({ "resumes._id": resumeId }, { "resumes.$": 1 });
+      const resumeDocument = await Resume.findOne(
+        { "resumes._id": resumeId },
+        { "resumes.$": 1 }
+      );
       if (!resumeDocument) {
         console.warn(`Resume with ID ${resumeId} not found.`);
         continue; // Skip if resume not found
       }
 
       const resumePath = resumeDocument.resumes[0].resume;
-      const resumeText = fs.readFileSync(path.resolve(resumePath), 'utf-8');
-      
+      const resumeText = fs.readFileSync(path.resolve(resumePath), "utf-8");
+
       // Call getLLMEvaluationStats to evaluate the resume
-      const evaluationResult = await getLLMEvaluationMatcher(resumeText, jobCompany, fitThreshold);
+      const evaluationResult = await getLLMEvaluationMatcher(
+        resumeText,
+        jobCompany,
+        fitThreshold
+      );
 
       const parsedResult = {
-        'Resume ID': resumeId,
-        'First Name': evaluationResult.firstName,
-        'Last Name': evaluationResult.lastName,
-        'Location': evaluationResult.location,
-        'Designation': evaluationResult.designation,
-        'Email': evaluationResult.email,
-        'Phone': evaluationResult.phone,
-        'Recommendation': evaluationResult.recommendation,
-        'Score': evaluationResult.score,
-        'Job Company': jobCompany
+        "Resume ID": resumeId,
+        "First Name": evaluationResult.firstName,
+        "Last Name": evaluationResult.lastName,
+        Location: evaluationResult.location,
+        Designation: evaluationResult.designation,
+        Email: evaluationResult.email,
+        Phone: evaluationResult.phone,
+        Recommendation: evaluationResult.recommendation,
+        Score: evaluationResult.score,
+        "Job Company": jobCompany,
       };
 
       results.push(parsedResult);
@@ -207,35 +255,43 @@ export const bulkMatcher = async (req, res) => {
 
     // Convert results to CSV
     const csvFields = [
-      { id: 'Resume ID', title: 'Resume ID' },
-      { id: 'First Name', title: 'First Name' },
-      { id: 'Last Name', title: 'Last Name' },
-      { id: 'Location', title: 'Location' },
-      { id: 'Designation', title: 'Designation' },
-      { id: 'Email', title: 'Email' },
-      { id: 'Phone', title: 'Phone' },
-      { id: 'Recommendation', title: 'Recommendation' },
-      { id: 'Score', title: 'Score' },
-      { id: 'Job Company', title: 'Job Company' }
+      { id: "Resume ID", title: "Resume ID" },
+      { id: "First Name", title: "First Name" },
+      { id: "Last Name", title: "Last Name" },
+      { id: "Location", title: "Location" },
+      { id: "Designation", title: "Designation" },
+      { id: "Email", title: "Email" },
+      { id: "Phone", title: "Phone" },
+      { id: "Recommendation", title: "Recommendation" },
+      { id: "Score", title: "Score" },
+      { id: "Job Company", title: "Job Company" },
     ];
-    const parser = new Parser({ fields: csvFields.map(field => field.id) });
+    const parser = new Parser({ fields: csvFields.map((field) => field.id) });
     const csv = parser.parse(results);
 
     // Write CSV to file
-    const csvFilePath = path.join(__dirname, '../../uploads', `report-${Date.now()}.csv`);
+    const csvFilePath = path.join(
+      __dirname,
+      "../../uploads",
+      `report-${Date.now()}.csv`
+    );
     fs.writeFileSync(csvFilePath, csv);
 
-    res.status(200).json({ message: 'Report generated successfully', csvUrl: `${req.protocol}://${req.get('host')}/uploads/${path.basename(csvFilePath)}` });
+    res
+      .status(200)
+      .json({
+        message: "Report generated successfully",
+        csvUrl: `${req.protocol}://${req.get("host")}/uploads/${path.basename(
+          csvFilePath
+        )}`,
+      });
   } catch (error) {
     console.error("Error processing resumes:", error);
-    res.status(500).json({ error: "An error occurred while processing the resumes." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while processing the resumes." });
   }
 };
-
-
-
-
-
 
 export const stats = async (req, res) => {
   const resumeFile = req.file;
@@ -271,7 +327,9 @@ export const stats = async (req, res) => {
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
     // Analyze the resume text for strengths, weaknesses, and skills
-    const { strengths, weaknesses, skills } = await getLLMEvaluationStats(resumeText);
+    const { strengths, weaknesses, skills } = await getLLMEvaluationStats(
+      resumeText
+    );
 
     // Format strengths and weaknesses as arrays of objects
     const formattedStrengths = strengths.map((point) => ({ point }));
@@ -284,7 +342,7 @@ export const stats = async (req, res) => {
         $push: {
           resumes: {
             resume: relativePath, // Store only the relative path
-            filename:fileName,
+            filename: fileName,
             strengths: formattedStrengths,
             weaknesses: formattedWeaknesses,
             skills: skills.map((skill) => ({
@@ -305,7 +363,9 @@ export const stats = async (req, res) => {
     });
   } catch (error) {
     console.error("Error processing resume:", error);
-    res.status(500).json({ error: "An error occurred while processing the resume." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while processing the resume." });
   }
 };
 
@@ -315,13 +375,20 @@ export const resumeview = async (req, res) => {
   try {
     // Define the base directory for resume uploads
     const relativeUploadsDir = `uploads`; // Adjusted to point to "uploads" directory in root
-    const resumeFilePath = path.join(process.cwd(), relativeUploadsDir, fileName); // Full path
+    const resumeFilePath = path.join(
+      process.cwd(),
+      relativeUploadsDir,
+      fileName
+    ); // Full path
 
     // Check if the file exists
     if (fs.existsSync(resumeFilePath)) {
       // Set headers to prompt file download
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${fileName}"`
+      );
 
       // Stream the file to the response
       fs.createReadStream(resumeFilePath).pipe(res);
@@ -331,10 +398,11 @@ export const resumeview = async (req, res) => {
     }
   } catch (error) {
     console.error("Error serving resume:", error);
-    res.status(500).json({ error: "An error occurred while fetching the resume file." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching the resume file." });
   }
 };
-
 
 export const getAllResumes = async (req, res) => {
   const { userId } = req.query;
@@ -378,18 +446,19 @@ export const getAllResumes = async (req, res) => {
   }
 };
 
-
 export const deleteResume = async (req, res) => {
   const { userId, resume } = req.body;
 
   if (!userId || !resume) {
-    return res.status(400).json({ error: "User ID and file name are required." });
+    return res
+      .status(400)
+      .json({ error: "User ID and file name are required." });
   }
 
   try {
     // Define the base directory for resume uploads
-    const relativeUploadsDir = 'uploads';
-    const resumeFilePath = resume
+    const relativeUploadsDir = "uploads";
+    const resumeFilePath = resume;
 
     // Check if the file exists and delete it from the server
     if (fs.existsSync(resumeFilePath)) {
@@ -406,7 +475,9 @@ export const deleteResume = async (req, res) => {
     );
 
     if (!updatedResume) {
-      return res.status(404).json({ error: "Resume not found in the database." });
+      return res
+        .status(404)
+        .json({ error: "Resume not found in the database." });
     }
 
     res.json({
@@ -416,11 +487,11 @@ export const deleteResume = async (req, res) => {
     });
   } catch (error) {
     console.error("Error deleting resume:", error);
-    res.status(500).json({ error: "An error occurred while deleting the resume." });
+    res
+      .status(500)
+      .json({ error: "An error occurred while deleting the resume." });
   }
 };
-
-
 
 // Helper function to get embeddings for text chunks
 async function getEmbeddingsForChunks(chunks) {
@@ -543,31 +614,37 @@ export async function getLLMEvaluationStats(resumeText) {
     );
 
     // Parse strengths and weaknesses into arrays based on dash "-" or newline delimiters
-    const strengths = strengthsMatch && strengthsMatch[0].trim()
-      ? strengthsMatch[0]
-          .split(/\s*-\s+/) // Split on dash followed by whitespace
-          .filter((s) => s.trim() !== "") // Filter out any empty items
-      : ["No specific strengths identified."];
+    const strengths =
+      strengthsMatch && strengthsMatch[0].trim()
+        ? strengthsMatch[0]
+            .split(/\s*-\s+/) // Split on dash followed by whitespace
+            .filter((s) => s.trim() !== "") // Filter out any empty items
+        : ["No specific strengths identified."];
 
-    const weaknesses = weaknessesMatch && weaknessesMatch[0].trim()
-      ? weaknessesMatch[0]
-          .split(/\s*-\s+/) // Split on dash followed by whitespace
-          .filter((w) => w.trim() !== "")
-      : ["No specific weaknesses identified."];
+    const weaknesses =
+      weaknessesMatch && weaknessesMatch[0].trim()
+        ? weaknessesMatch[0]
+            .split(/\s*-\s+/) // Split on dash followed by whitespace
+            .filter((w) => w.trim() !== "")
+        : ["No specific weaknesses identified."];
 
     // Parse skills into an array of objects with skill name and level
-    const skills = skillsMatch && skillsMatch[0].trim()
-      ? skillsMatch[0]
-          .split(/\n+/) // Split by newline
-          .map((skill) => {
-            const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/); // Capture skill name and level
-            if (match) {
-              return { skillName: match[1].trim(), skillLevel: parseInt(match[2], 10) };
-            }
-            return null;
-          })
-          .filter(Boolean) // Remove null values
-      : [{ skillName: "No skills identified", skillLevel: 0 }];
+    const skills =
+      skillsMatch && skillsMatch[0].trim()
+        ? skillsMatch[0]
+            .split(/\n+/) // Split by newline
+            .map((skill) => {
+              const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/); // Capture skill name and level
+              if (match) {
+                return {
+                  skillName: match[1].trim(),
+                  skillLevel: parseInt(match[2], 10),
+                };
+              }
+              return null;
+            })
+            .filter(Boolean) // Remove null values
+        : [{ skillName: "No skills identified", skillLevel: 0 }];
 
     return {
       strengths,
@@ -584,7 +661,11 @@ export async function getLLMEvaluationStats(resumeText) {
   }
 }
 
-export async function getLLMEvaluationMatcher(resumeText, jobCompany, fitThreshold = 70) {
+export async function getLLMEvaluationMatcher(
+  resumeText,
+  jobCompany,
+  fitThreshold = 70
+) {
   const prompt = `
     You are an expert career coach and resume evaluator. Based on the following resume, analyze the person's strengths, weaknesses, and provide numeric skill proficiency levels (out of 100) for technical skills mentioned in the resume. Extract key personal information and evaluate the fit for a role based on the job description.
 
@@ -636,28 +717,58 @@ export async function getLLMEvaluationMatcher(resumeText, jobCompany, fitThresho
     const response = result.response.text();
 
     // Extract each field from the response using regex
-    const firstName = response.match(/(?<=\*\*First Name\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
-    const lastName = response.match(/(?<=\*\*Last Name\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
-    const location = response.match(/(?<=\*\*Location\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
-    const designation = response.match(/(?<=\*\*Designation\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
-    const email = response.match(/(?<=\*\*Email\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
-    const phone = response.match(/(?<=\*\*Phone\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'N/A';
-    const recommendation = response.match(/(?<=\*\*Recommendation\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || 'No recommendation provided.';
-    const score = parseInt(response.match(/(?<=\*\*Score\*\*:\s*)(\d+)/i)?.[0], 10) || 'N/A';
+    const firstName =
+      response.match(/(?<=\*\*First Name\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() ||
+      "N/A";
+    const lastName =
+      response.match(/(?<=\*\*Last Name\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() ||
+      "N/A";
+    const location =
+      response.match(/(?<=\*\*Location\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() ||
+      "N/A";
+    const designation =
+      response.match(/(?<=\*\*Designation\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() ||
+      "N/A";
+    const email =
+      response.match(/(?<=\*\*Email\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || "N/A";
+    const phone =
+      response.match(/(?<=\*\*Phone\*\*:\s*)(.*)(?=\n)/i)?.[0]?.trim() || "N/A";
+    const recommendation =
+      response
+        .match(/(?<=\*\*Recommendation\*\*:\s*)(.*)(?=\n)/i)?.[0]
+        ?.trim() || "No recommendation provided.";
+    const score =
+      parseInt(response.match(/(?<=\*\*Score\*\*:\s*)(\d+)/i)?.[0], 10) ||
+      "N/A";
 
     // Parse strengths, weaknesses, and skills as before
-    const strengthsMatch = response.match(/(?<=\*\*Strengths\*\*:\s*)([\s\S]+?)(?=\*\*Weaknesses\*\*:)/i);
-    const weaknessesMatch = response.match(/(?<=\*\*Weaknesses\*\*:\s*)([\s\S]+?)(?=\*\*Skills and Proficiency\*\*:)/i);
-    const skillsMatch = response.match(/(?<=\*\*Skills and Proficiency\*\*:\s*)([\s\S]+)/i);
+    const strengthsMatch = response.match(
+      /(?<=\*\*Strengths\*\*:\s*)([\s\S]+?)(?=\*\*Weaknesses\*\*:)/i
+    );
+    const weaknessesMatch = response.match(
+      /(?<=\*\*Weaknesses\*\*:\s*)([\s\S]+?)(?=\*\*Skills and Proficiency\*\*:)/i
+    );
+    const skillsMatch = response.match(
+      /(?<=\*\*Skills and Proficiency\*\*:\s*)([\s\S]+)/i
+    );
 
-    const strengths = strengthsMatch ? strengthsMatch[0].split(/\s*-\s+/).filter((s) => s.trim()) : ["No specific strengths identified."];
-    const weaknesses = weaknessesMatch ? weaknessesMatch[0].split(/\s*-\s+/).filter((w) => w.trim()) : ["No specific weaknesses identified."];
+    const strengths = strengthsMatch
+      ? strengthsMatch[0].split(/\s*-\s+/).filter((s) => s.trim())
+      : ["No specific strengths identified."];
+    const weaknesses = weaknessesMatch
+      ? weaknessesMatch[0].split(/\s*-\s+/).filter((w) => w.trim())
+      : ["No specific weaknesses identified."];
     const skills = skillsMatch
       ? skillsMatch[0]
           .split(/\n+/)
           .map((skill) => {
             const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/);
-            return match ? { skillName: match[1].trim(), skillLevel: parseInt(match[2], 10) } : null;
+            return match
+              ? {
+                  skillName: match[1].trim(),
+                  skillLevel: parseInt(match[2], 10),
+                }
+              : null;
           })
           .filter(Boolean)
       : [{ skillName: "No skills identified", skillLevel: 0 }];
@@ -694,8 +805,6 @@ export async function getLLMEvaluationMatcher(resumeText, jobCompany, fitThresho
     };
   }
 }
-
-
 
 export const getResumeAnalysis = async (req, res) => {
   const { userId } = req.body;
@@ -759,14 +868,13 @@ export const getSkillProgresses = async (req, res) => {
   }
 };
 
-
 export const getStatusCount = async (req, res) => {
   try {
     // Destructure userId from req.body
     const { userId } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ message: 'User ID is required' });
+      return res.status(400).json({ message: "User ID is required" });
     }
 
     // Convert userId to ObjectId since it's stored as ObjectId in the database
@@ -775,12 +883,12 @@ export const getStatusCount = async (req, res) => {
     // Aggregate job statuses by userId
     const statusCount = await Job.aggregate([
       { $match: { userId: userObjectId } }, // Match userId as ObjectId
-      { 
-        $group: { 
-          _id: "$status", 
-          count: { $sum: 1 } 
-        } 
-      }
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     console.log(statusCount); // Debugging: check the output
@@ -803,7 +911,8 @@ export const getStatusCount = async (req, res) => {
 
     res.json({ data: result });
   } catch (error) {
-    res.status(500).json({ message: 'Error retrieving job status count', error });
+    res
+      .status(500)
+      .json({ message: "Error retrieving job status count", error });
   }
 };
-
