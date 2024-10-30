@@ -1,11 +1,21 @@
 import { configureStore } from '@reduxjs/toolkit'
 import jobDescriptionReducer from './features/job/jobSlice'
 import jobReducer from "./features/job/jobSearch";
+import authReducer from "./features/user/user";
+import resumeReducer from './features/resume/resumeSlice';
 
 export const makeStore = () => {
   return configureStore({
     reducer: {
       // Define your reducers here
+
+      //user Slice
+      auth: authReducer,
+
+      //Resume Slice
+      resume: resumeReducer,
+
+      // Job Slice
       jobDescription: jobDescriptionReducer,
       jobs: jobReducer,
 

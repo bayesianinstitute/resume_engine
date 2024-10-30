@@ -11,62 +11,136 @@ import { ObjectId } from 'mongodb';
 // import { PDFLoader } from 'pdf-loader-library';
 import { fileURLToPath } from "url";
 import { Job } from "../models/jobTracker.js";
+import {JobMatching} from '../models/JobMatching.js'; // Import your JobMatching model
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
+  const prompt = `
+    Evaluate the following resume against the job description. For each criterion, provide a score out of 100:
+    - Relevance to the job role
+    - Skills and expertise
+    - Experience level
+    - Presentation and clarity
+
+    Also, calculate a composite score. If the composite score is below ${fitThreshold}, include a recommendation for improvement.
+
+    Respond strictly in the following JSON format without any additional text:
+    {
+      "scores": {
+        "relevance": <score>,
+        "skills": <score>,
+        "experience": <score>,
+        "presentation": <score>
+      },
+      "compositeScore": <score>,
+      "recommendation": "<one concise suggestion if applicable>"
+    }
+
+    Make sure not to include any other text or formatting, only the JSON object.
+
+    Resume:
+    ${resumeText}
+
+    Job Description:
+    ${jobDescription}
+  `;
+
+  try {
+    const chatSession = genAIModel.startChat({ history: [] });
+    const result = await chatSession.sendMessage(prompt);
+    let response = result.response.text().trim();
+
+    // Function to check if the response is valid JSON
+    const isValidJSON = (text) => {
+      try {
+        JSON.parse(text);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // If response is not valid JSON, resend the request
+    if (!isValidJSON(response)) {
+      console.warn("Response was not in JSON format. Resending request.");
+      response = await chatSession.sendMessage(prompt + "\n\nPlease ensure your response is in valid JSON format.");
+      response = response.response.text().trim();
+    }
+
+    // Parse the validated JSON response
+    const jsonResponse = JSON.parse(response);
+
+    return {
+      evaluationText: response,
+      scores: jsonResponse.scores,
+      compositeScore: jsonResponse.compositeScore,
+      recommendation: jsonResponse.recommendation,
+    };
+  } catch (error) {
+    console.error("Error fetching LLM evaluation:", error);
+    return {
+      evaluationText: "Evaluation and improvement suggestions are not available.",
+      scores: {},
+      compositeScore: null,
+      recommendation: '',
+    };
+  }
+}
+
+
+
+
+
+
+
 export const matcher = async (req, res) => {
   const { resumeEntryId, jobId } = req.body;
-  const fitThreshold = 70; // Define threshold here
+  const fitThreshold = 70;
 
   if (!resumeEntryId || !jobId) {
-    return res
-      .status(400)
-      .json({ error: "Resume entry ID and Job ID are required." });
+    return res.status(400).json({ error: "Resume entry ID and Job ID are required." });
   }
 
   try {
-    // Find the resume entry within the `resumes` array
     const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
-    if (!resumeData) {
-      return res.status(404).json({ error: "Resume entry not found." });
-    }
+    if (!resumeData) return res.status(404).json({ error: "Resume entry not found." });
 
-    // Find the specific resume entry within the `resumes` array
     const resumeEntry = resumeData.resumes.find((r) => r._id.toString() === resumeEntryId);
-    if (!resumeEntry) {
-      return res.status(404).json({ error: "Resume entry not found in the resumes array." });
-    }
+    if (!resumeEntry) return res.status(404).json({ error: "Resume entry not found in the resumes array." });
 
     const resumePath = resumeEntry.resume;
-
-    // Fetch job description from the database
     const jobData = await Joblist.findById(jobId);
-    if (!jobData) {
-      return res.status(404).json({ error: "Job not found." });
-    }
-    const jobDescription = jobData.description;
+    if (!jobData) return res.status(404).json({ error: "Job not found." });
 
-    // Load and extract text from the resume PDF
+    const jobDescription = jobData.description;
     const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
     const resumeDocs = await pdfLoader.load();
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-    // Pass fitThreshold to getLLMEvaluation
-    // const { evaluationText, score } = await getLLMEvaluation(
-    //   resumeText,
-    //   jobDescription,
-    //   fitThreshold
-    // );
+    const { evaluationText, compositeScore, scores, recommendation } = await getLLMEvaluation(
+      resumeText,
+      jobDescription,
+      fitThreshold
+    );
 
-    const evaluationText = "Consider adding more keywords related to the job requirements.";
-    const score = 75; // Sample score, you can adjust this value as needed
+    // Save the evaluation to JobMatching
+    const jobMatchingEntry = new JobMatching({
+      resumeEntryId,
+      jobId,
+      scores,
+      compositeScore,
+      recommendation,
+    });
+    await jobMatchingEntry.save();
 
     let resultMessage;
-    if (score !== null && score >= fitThreshold) {
-      resultMessage = `You are a good fit for this role with a score of ${score}%.`;
+    if (compositeScore !== null && compositeScore >= fitThreshold) {
+      resultMessage = `You are a good fit for this role with a score of ${compositeScore}%.`;
     } else {
-      resultMessage = `You are not a perfect fit for this role with a score of ${score}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
+      resultMessage = `You are not a perfect fit for this role with a score of ${compositeScore}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
     }
 
     res.json({
@@ -75,11 +149,11 @@ export const matcher = async (req, res) => {
     });
   } catch (error) {
     console.error("Error processing resume match:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while processing the resume match." });
+    res.status(500).json({ error: "An error occurred while processing the resume match." });
   }
 };
+
+
 
 export const bulkMatcher = async (req, res) => {
   const { resumeIds, jobId } = req.body;
@@ -166,6 +240,7 @@ export const bulkMatcher = async (req, res) => {
 export const stats = async (req, res) => {
   const resumeFile = req.file;
   const { userId } = req.body;
+  const fileName = resumeFile.originalname;
 
   if (!resumeFile) {
     return res.status(400).json({ error: "Resume file is required." });
@@ -209,6 +284,7 @@ export const stats = async (req, res) => {
         $push: {
           resumes: {
             resume: relativePath, // Store only the relative path
+            filename:fileName,
             strengths: formattedStrengths,
             weaknesses: formattedWeaknesses,
             skills: skills.map((skill) => ({
@@ -223,8 +299,9 @@ export const stats = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Resume analysis and data saved successfully!",
+      message: "Resume Upload and analysis data successfully!",
       data: resumeRecord,
+      resumeId: resumeRecord._id.toString(), // Send resume _id in response
     });
   } catch (error) {
     console.error("Error processing resume:", error);
@@ -279,7 +356,8 @@ export const getAllResumes = async (req, res) => {
 
     // Format the resumes data for response
     const resumes = resumeData.resumes.map((resume, index) => ({
-      id: index,
+      resumeId: resume._id.toString(), // Send resume id as collection id from db
+      filename: resume.filename, // Include the file name for response
       strengths: resume.strengths.map((s) => s.point), // Extract points for response
       weaknesses: resume.weaknesses.map((w) => w.point), // Extract points for response
       skills: resume.skills,
@@ -301,6 +379,49 @@ export const getAllResumes = async (req, res) => {
 };
 
 
+export const deleteResume = async (req, res) => {
+  const { userId, resume } = req.body;
+
+  if (!userId || !resume) {
+    return res.status(400).json({ error: "User ID and file name are required." });
+  }
+
+  try {
+    // Define the base directory for resume uploads
+    const relativeUploadsDir = 'uploads';
+    const resumeFilePath = resume
+
+    // Check if the file exists and delete it from the server
+    if (fs.existsSync(resumeFilePath)) {
+      fs.unlinkSync(resumeFilePath); // Remove the file from the server
+    } else {
+      return res.status(404).json({ error: "File not found on the server." });
+    }
+
+    // Remove the resume reference from the database
+    const updatedResume = await Resume.findOneAndUpdate(
+      { userId },
+      { $pull: { resumes: { resume: resume } } },
+      { new: true }
+    );
+
+    if (!updatedResume) {
+      return res.status(404).json({ error: "Resume not found in the database." });
+    }
+
+    res.json({
+      success: true,
+      message: "Resume deleted successfully.",
+      data: updatedResume,
+    });
+  } catch (error) {
+    console.error("Error deleting resume:", error);
+    res.status(500).json({ error: "An error occurred while deleting the resume." });
+  }
+};
+
+
+
 // Helper function to get embeddings for text chunks
 async function getEmbeddingsForChunks(chunks) {
   try {
@@ -319,57 +440,57 @@ async function getEmbeddingsForChunks(chunks) {
   }
 }
 
-async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
-  const prompt = `
-    Evaluate the following resume against the job description. For each criterion, provide a numerical score out of 100:
-    - Relevance to the job role
-    - Skills and expertise
-    - Experience level
-    - Presentation and clarity
+// async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
+//   const prompt = `
+//     Evaluate the following resume against the job description. For each criterion, provide a numerical score out of 100:
+//     - Relevance to the job role
+//     - Skills and expertise
+//     - Experience level
+//     - Presentation and clarity
 
-    List each score only once. After listing these, provide a single composite score. If the composite score is below ${fitThreshold}, give one recommendation on how to improve. **Do not repeat any of the criteria, scores, or recommendations. Stop after the recommendation.**
+//     List each score only once. After listing these, provide a single composite score. If the composite score is below ${fitThreshold}, give one recommendation on how to improve. **Do not repeat any of the criteria, scores, or recommendations. Stop after the recommendation.**
 
-    Format example:
-    - Relevance: 80%
-    - Skills: 75%
-    - Experience: 60%
-    - Presentation: 90%
-    - Composite Score: 76%
-    - Recommendation: [One sentence only, if needed]
+//     Format example:
+//     - Relevance: 80%
+//     - Skills: 75%
+//     - Experience: 60%
+//     - Presentation: 90%
+//     - Composite Score: 76%
+//     - Recommendation: [One sentence only, if needed]
 
-    Resume:
-    ${resumeText}
+//     Resume:
+//     ${resumeText}
 
-    Job Description:
-    ${jobDescription}
+//     Job Description:
+//     ${jobDescription}
 
-    Output format:
-    - Scores for each criterion
-    - Composite Score
-    - One recommendation if applicable
-  `;
-  try {
-    const chatSession = genAIModel.startChat({
-      history: [],
-    });
+//     Output format:
+//     - Scores for each criterion
+//     - Composite Score
+//     - One recommendation if applicable
+//   `;
+//   try {
+//     const chatSession = genAIModel.startChat({
+//       history: [],
+//     });
 
-    const result = await chatSession.sendMessage(prompt);
+//     const result = await chatSession.sendMessage(prompt);
 
-    const response = result.response.text();
+//     const response = result.response.text();
 
-    const scoreMatch = response.match(/Composite Score:\s*(\d+)/i);
-    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+//     const scoreMatch = response.match(/Composite Score:\s*(\d+)/i);
+//     const score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
 
-    return { evaluationText: response, score };
-  } catch (error) {
-    console.error("Error fetching LLM evaluation:", error);
-    return {
-      evaluationText:
-        "Evaluation and improvement suggestions are not available.",
-      score: null,
-    };
-  }
-}
+//     return { evaluationText: response, score };
+//   } catch (error) {
+//     console.error("Error fetching LLM evaluation:", error);
+//     return {
+//       evaluationText:
+//         "Evaluation and improvement suggestions are not available.",
+//       score: null,
+//     };
+//   }
+// }
 
 export async function getLLMEvaluationStats(resumeText) {
   const prompt = `

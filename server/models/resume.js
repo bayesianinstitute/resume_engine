@@ -12,6 +12,10 @@ const resumeSchema = new mongoose.Schema({
         type: String, // Store PDF data as a Buffer
         required: true,
       },
+      filename:{
+        type:String,
+        required: true,
+      },
       strengths: [
         {
           point: String, // Each strength point as an individual object

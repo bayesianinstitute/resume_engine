@@ -12,6 +12,8 @@ import Sidebar from "@/components/ui/sidebar"
 
 export default function ResumeMatcher() {
   const [file, setFile] = useState<File | null>(null)
+  // const { jobDescription, prepResources, loading } = useSelector((state:RootState) => state.jobDescription);
+
   const [jobDescription, setJobDescription] = useState('')
   const [matchResult, setMatchResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
