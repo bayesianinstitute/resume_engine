@@ -61,7 +61,7 @@ const resumeSlice = createSlice({
       })
       .addCase(fetchResumes.fulfilled, (state, action) => {
         // Ensure the payload contains the array of resumes
-        console.log(action.payload);
+        // console.log(action.payload);
         if (action.payload && Array.isArray(action.payload.data)) {
           state.resumes = action.payload.data; // Explicitly assign the resumes
         } else {

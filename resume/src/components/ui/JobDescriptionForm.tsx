@@ -26,7 +26,7 @@ export const JobDescriptionForm: React.FC<JobDescriptionFormProps> = ({ jobDescr
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
+          <div className="space-y-2 ">
             <Label htmlFor="jobDescription">Job Description</Label>
             <Textarea
               id="jobDescription"
@@ -34,7 +34,7 @@ export const JobDescriptionForm: React.FC<JobDescriptionFormProps> = ({ jobDescr
               value={jobDescription}
               onChange={(e) => dispatch(setJobDescription(e.target.value))}
               rows={5}
-              className="w-full resize-none"
+              className="h-[300px]"
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>

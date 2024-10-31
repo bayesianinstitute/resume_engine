@@ -35,7 +35,7 @@ export default function AuthLayout({
 
     // Fetch jobs if not already in store
     if (!jobs.jobs.length) {
-      dispatch(fetchJobs(1))
+      dispatch(fetchJobs({ page: 1, limit: 10 }))
     }
 
     // Fetch resumes if not already in store

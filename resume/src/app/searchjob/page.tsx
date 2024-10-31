@@ -54,7 +54,7 @@ export default function JobScraper() {
       router.replace("/login");
       return;
     }
-    dispatch(fetchJobs(1));
+    dispatch(fetchJobs({ page: 1, limit: 10 }));
   }, [dispatch, router]);
 
   const handleSearch = async (event: React.FormEvent) => {

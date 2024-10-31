@@ -17,37 +17,48 @@ import {
   setLoading,
   setPrepResources,
 } from "@/lib/store/features/job/jobSlice";
-import { RootState } from "@/lib/store/store";
-import { PrepResource } from "@/types/interview";
+import { AppDispatch, RootState } from "@/lib/store/store";
+import { preparationAPIResponse, PrepResource } from "@/types/interview";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, Download, List, MessageSquare } from "lucide-react";
-import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { saveAs } from "file-saver"; // Install this library with: npm install file-saver
-
-function downloadPrepResources() {
-  const fileContent = JSON.stringify(prepResources, null, 2);
-  const blob = new Blob([fileContent], { type: "application/json" });
-  saveAs(blob, "interview_preparation_resources.json");
-}
+import {
+  downloadPrepResourcePDF,
+  downloadPrepResourcesDocx,
+  parsePreparationResources,
+} from "@/lib/fileparse";
+import { fetchJobs } from "@/lib/store/features/job/jobSearch";
+import { toast } from "react-toastify";
 
 export default function InterviewPreparation() {
-  const dispatch = useDispatch();
-  const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
   const { jobDescription, prepResources, loading } = useSelector(
     (state: RootState) => state.jobDescription
   );
-  const jobs = useSelector((state: RootState) => state.jobs.jobs);
+  const { jobs, totalJobs } = useSelector((state: RootState) => state.jobs);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const cardRef = useRef<HTMLDivElement | null>(null); 
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.replace("/login");
+  const loadMoreJobs = useCallback(() => {
+    if (!loading && jobs.length < totalJobs) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      dispatch(fetchJobs({ page: nextPage, limit: 10 }));
     }
-  }, [router]);
+  }, [currentPage, loading, jobs.length, totalJobs, dispatch]);
+
+  const handleJobSelect = (jobId: string) => {
+    const selectedJob = jobs.find((job) => job._id === jobId);
+    if (selectedJob) {
+      dispatch(setJobDescription(selectedJob.description));
+      setSelectedJob(jobId);
+    } else {
+      dispatch(setJobDescription(""));
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -71,92 +82,28 @@ export default function InterviewPreparation() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to generate interview preparation resources.");
+      const responseData: preparationAPIResponse = await response.json();
+      if (responseData.success) {
+        const prepResources: PrepResource[] = parsePreparationResources(
+          responseData.data
+        );
+
+        dispatch(setPrepResources(prepResources));
+        toast.success(responseData.message);
+        if (cardRef.current) {
+          // Scroll to card if it exists
+          cardRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      } else {
+        toast.error(responseData.message);
       }
-
-      const data = await response.json();
-      const prepResources: PrepResource[] = parsePreparationResources(
-        data.preparationResources
-      );
-
-      dispatch(setPrepResources(prepResources));
     } catch (error) {
       console.error("Error:", error);
-      alert(
+      toast.warning(
         "An error occurred while generating interview preparation resources."
       );
     } finally {
       dispatch(setLoading(false));
-    }
-  };
-
-  function parsePreparationResources(text: string): PrepResource[] {
-    const lines = text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line);
-    const resources: PrepResource[] = [];
-
-    let currentType: "topic" | "question" | "tip" | null = null;
-    let buffer: string[] = [];
-    let currentTitle: string = "";
-
-    lines.forEach((line) => {
-      if (line.startsWith("**Key Skills:**")) {
-        if (buffer.length && currentType) {
-          resources.push({
-            title: currentTitle,
-            content: buffer.join("\n"),
-            type: currentType,
-          });
-        }
-        currentType = "topic";
-        currentTitle = "Key Skills";
-        buffer = [];
-      } else if (line.startsWith("**Interview Questions:**")) {
-        if (buffer.length && currentType) {
-          resources.push({
-            title: currentTitle,
-            content: buffer.join("\n"),
-            type: currentType,
-          });
-        }
-        currentType = "question";
-        currentTitle = "Interview Questions";
-        buffer = [];
-      } else if (line.startsWith("**Preparation Tips:**")) {
-        if (buffer.length && currentType) {
-          resources.push({
-            title: currentTitle,
-            content: buffer.join("\n"),
-            type: currentType,
-          });
-        }
-        currentType = "tip";
-        currentTitle = "Preparation Tips";
-        buffer = [];
-      } else {
-        buffer.push(line);
-      }
-    });
-
-    if (buffer.length && currentType) {
-      resources.push({
-        title: currentTitle,
-        content: buffer.join("\n"),
-        type: currentType,
-      });
-    }
-
-    return resources;
-  }
-
-  const handleJobSelect = (jobId: string) => {
-    const selectedJob = jobs.find((job) => job._id === jobId);
-    if (selectedJob) {
-      dispatch(setJobDescription(selectedJob.description));
-      setSelectedJob(jobId);
     }
   };
 
@@ -176,6 +123,9 @@ export default function InterviewPreparation() {
             jobs={jobs}
             selectedJob={selectedJob}
             handleJobSelect={handleJobSelect}
+            totalJobs={totalJobs}
+            loading={loading}
+            onLoadMore={loadMoreJobs}
           />
           <JobDescriptionForm
             jobDescription={jobDescription}
@@ -191,7 +141,7 @@ export default function InterviewPreparation() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <Card className="shadow-lg">
+                  <Card className="shadow-lg" >
                     <CardHeader className="flex justify-between items-center">
                       <div>
                         <CardTitle>Interview Preparation Resources</CardTitle>
@@ -239,9 +189,20 @@ export default function InterviewPreparation() {
                     </CardContent>
                   </Card>
                 </motion.div>
-                <Button onClick={downloadPrepResources} variant="outline">
+                <Button
+                  onClick={() => downloadPrepResourcePDF(prepResources)}
+                  variant="outline"
+                  className=" mr-5"
+                >
                   <Download className="mr-2 h-4 w-4" />
-                  Download File
+                  Download PDF File
+                </Button>
+                <Button
+                  onClick={() => downloadPrepResourcesDocx(prepResources)}
+                  variant="outline"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download DOCX File
                 </Button>
               </>
             )}

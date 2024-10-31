@@ -18,10 +18,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { dateOptions, experienceOptions } from "@/constant/dropdata";
 import { useState } from "react";
-import useAuth from "@/hooks/useAuth";
 
-import { toast } from "react-toastify";
 import { AddJobApi, AutoJob, AutoJobApi, Job } from "@/types/job";
+import { toast } from "react-toastify";
 
 export default function JobTabs() {
   const [formData, setFormData] = useState<Job>({
@@ -211,10 +210,10 @@ export default function JobTabs() {
                       </Label>
                       <br />
                       <CustomDropdown
-                        options={experienceOptions}
+                        options={experienceOptions as never[]}
                         placeholder="Select Experience Level"
-                        value={selectedExperience}
-                        onSelect={(value) => {
+                        value={selectedExperience as never}
+                        onSelect={(value: string) => {
                           setSelectedExperience(value);
                           setFormData((prev) => ({
                             ...prev,
@@ -297,7 +296,7 @@ export default function JobTabs() {
                       <label htmlFor="datePosted">Date Posted</label>
                       <br />
                       <CustomDropdown
-                        options={dateOptions}
+                        options={dateOptions as never}
                         placeholder="Select date range"
                         value={selectedDate}
                         onSelect={(value) => {

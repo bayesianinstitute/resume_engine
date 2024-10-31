@@ -108,12 +108,14 @@ export default function ResumeMatcher() {
 
       <div className="flex-1 ml-64 flex items-center justify-center">
         <div className="flex-1 p-6">
-        <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100 text-center mb-8">
-        Resume Matching Tool
-        </h1>
- 
+          <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100 text-center mb-8">
+            Resume Matching Tool
+          </h1>
+
           <p className="text-lg text-center text-gray-600 dark:text-gray-300 mb-8">
-            Unlock your interview potential with our tailored resources, carefully curated to match your resume with the perfect job opportunities.
+            Unlock your interview potential with our tailored resources,
+            carefully curated to match your resume with the perfect job
+            opportunities.
           </p>
           <Card className="w-full max-w-4xl mx-auto">
             <CardHeader>
@@ -212,20 +214,29 @@ export default function ResumeMatcher() {
                         onCheckedChange={() => toggleJob(job._id)}
                       />
                       <Label
-                        htmlFor={`job-${index}`}
-                        className="text-sm leading-none flex items-center"
+                        htmlFor={job._id}
+                        className="flex-1 text-sm leading-none flex items-center cursor-pointer"
                       >
                         <Briefcase className="h-4 w-4 mr-2" />
-                        {new Date(job.datePosted).toLocaleDateString()} -{" "}
-                        {job.company || "N/A"} - {job.title} -{" "}
+                        <span className="font-medium">{job.title}</span>
+                        <span className="mx-2 text-gray-400">|</span>
+                        <span className="text-gray-600">
+                          {job.company || "N/A"}
+                        </span>
+
+                        <span className="mx-2 text-gray-400">|</span>
+                        <span className="text-gray-500 text-xs">
+                          {new Date(job.datePosted).toLocaleDateString()}
+                        </span>
                         <a
                           href={job.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200 mr-3"
+                          className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Link className="w-4 h-4 mr-2" />
-                          View Details
+                          <Link className="w-4 h-4 mr-1" />
+                          View
                         </a>
                       </Label>
                     </div>

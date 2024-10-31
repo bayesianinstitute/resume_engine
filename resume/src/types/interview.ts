@@ -3,3 +3,9 @@ export interface PrepResource {
   content: string;
   type: "topic" | "question" | "tip";
 }
+
+export interface preparationAPIResponse{
+  message: string;
+  success: boolean;
+  data: string;
+}

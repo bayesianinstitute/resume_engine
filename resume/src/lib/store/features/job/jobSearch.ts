@@ -58,16 +58,16 @@ export const searchJobs = createAsyncThunk(
 export const clearSearch = createAsyncThunk(
   "jobs/clearSearch",
   async (_, { dispatch }) => {
-    dispatch(fetchJobs(1));
+    dispatch(fetchJobs({ page: 1, limit: 10 }));
   }
 );
 
 export const fetchJobs = createAsyncThunk(
   "jobs/fetchJobs",
-  async (page: number, { rejectWithValue }) => {
+  async ({ page, limit = 10 }: { page: number; limit: number }, { rejectWithValue }) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/job/list?page=${page}&limit=10`
+        `${process.env.NEXT_PUBLIC_BASE_URL}/job/list?page=${page}&limit=${limit}`
       );
 
       if (!response.ok) throw new Error("Failed to fetch jobs");
@@ -75,10 +75,12 @@ export const fetchJobs = createAsyncThunk(
       const data = await response.json();
       return data;
     } catch (error) {
+      console.log("error", error);
       return rejectWithValue("Failed to fetch jobs. Please try again.");
     }
   }
 );
+
 
 const jobSlice = createSlice({
   name: "jobs",
@@ -102,7 +104,11 @@ const jobSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
-        state.jobs = action.payload.joblists;
+        // Remove duplicates before merging
+        const uniqueJobs = action.payload.joblists.filter(job => 
+          !state.jobs.some(existingJob => existingJob._id === job._id)
+        );
+        state.jobs = [...state.jobs, ...uniqueJobs];
         state.totalJobs = action.payload.totalJoblists;
         state.loading = false;
       })
