@@ -21,23 +21,23 @@ import { useState } from "react";
 import useAuth from "@/hooks/useAuth";
 
 import { toast } from "react-toastify";
+import { AddJobApi, AutoJob, AutoJobApi, Job } from "@/types/job";
 
 export default function JobTabs() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Job>({
     title: "",
     location: "",
     experienceLevel: "",
-    datePosted: "",
+    datePosted: new Date(),
     description: "",
     url: "",
     company: "",
   });
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedExperience, setSelectedExperience] = useState("");
-  const [autoJobData, setAutoJobData] = useState({
+  const [autoJobData, setAutoJobData] = useState<AutoJob>({
     autoTitle: "",
     autoLocation: "",
-    autoExperienceLevel: "",
     autoDatePosted: 24,
   });
 
@@ -47,7 +47,11 @@ export default function JobTabs() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
+    if (id === "datePosted") {
+      setFormData((prev) => ({ ...prev, [id]: new Date(value) }));
+    } else {
+      setFormData((prev) => ({ ...prev, [id]: value }));
+    }
   };
 
   const handleAutoChange = (
@@ -91,34 +95,35 @@ export default function JobTabs() {
           title,
           location,
           experienceLevel,
-          datePosted,
+          datePosted: datePosted.toISOString().split('T')[0],
           description,
           url,
           company,
         }),
       }
     );
-
-    if (response.ok) {
-      toast.success("Job added successfully");
+    const responseData:AddJobApi = await response.json();
+    if (responseData.success) {
+      toast.success(responseData.message)
       setFormData({
         title: "",
         location: "",
         experienceLevel: "",
-        datePosted: "",
+        datePosted: new Date(),
         description: "",
         url: "",
         company: "",
       });
       setSelectedDate("");
       setSelectedExperience("");
-    } else {
-      toast.error("Failed to add job");
+
+    }else{
+      toast.error(responseData.message)
     }
   };
 
-  const fetchJobs = async () => {
-    const { autoTitle, autoLocation, autoExperienceLevel, autoDatePosted } =
+  const autofetchJobs = async () => {
+    const { autoTitle, autoLocation,  autoDatePosted } =
       autoJobData;
 
     if (!autoTitle || !autoLocation || !autoDatePosted) {
@@ -135,14 +140,15 @@ export default function JobTabs() {
           method: "POST",
         }
       );
+    const responseData:AutoJobApi = await response.json();
 
-      if (response.ok) {
-        const data: scrapeapi = await response.json();
-        toast.success(data.message);
+
+      if (responseData.success) {
+        toast.success(responseData.message);
 
         // Here you could add code to save the jobs to your database if needed.
       } else {
-        toast.error("Failed to scrape jobs");
+        toast.error(responseData.message);
       }
     } catch (error) {
       console.error("Error while fetching jobs:", error);
@@ -156,7 +162,7 @@ export default function JobTabs() {
 
       <Sidebar />
       <div className="flex-1 ml-64 flex items-center justify-center">
-        <div className="flex-1 ml-64 mt-9 ">
+        <div className="flex-1 ml-20 mt-9 ">
           <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100 text-center mb-8">
             Job Management System
           </h1>
@@ -171,8 +177,8 @@ export default function JobTabs() {
                 <TabsTrigger value="add-job">Add Job</TabsTrigger>
                 <TabsTrigger value="auto-job">Auto Job</TabsTrigger>
               </TabsList>
-              <TabsContent value="add-job" className="h-full overflow-auto">
-                <Card className="h-[600px]">
+              <TabsContent value="add-job" className="h-full ">
+                <Card className="">
                   <CardHeader>
                     <CardTitle>Add Job</CardTitle>
                     <CardDescription>
@@ -222,7 +228,7 @@ export default function JobTabs() {
                       <Input
                         id="datePosted"
                         type="date"
-                        value={formData.datePosted}
+                        value={formData.datePosted.toISOString().split('T')[0]}
                         onChange={handleChange}
                       />
                     </div>
@@ -288,23 +294,6 @@ export default function JobTabs() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="auto-experienceLevel">
-                        Experience Level
-                      </Label>
-                      <br />
-                      <CustomDropdown
-                        options={experienceOptions}
-                        placeholder="Select Experience Level"
-                        value={autoJobData.autoExperienceLevel}
-                        onSelect={(value) => {
-                          setAutoJobData((prev) => ({
-                            ...prev,
-                            autoExperienceLevel: value,
-                          }));
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
                       <label htmlFor="datePosted">Date Posted</label>
                       <br />
                       <CustomDropdown
@@ -322,7 +311,7 @@ export default function JobTabs() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button onClick={fetchJobs}>Auto Add Jobs</Button>
+                    <Button onClick={autofetchJobs}>Auto Add Jobs</Button>
                   </CardFooter>
                 </Card>
               </TabsContent>
