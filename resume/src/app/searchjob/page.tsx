@@ -252,6 +252,7 @@ export default function JobScraper() {
                     lastJobElementRef={
                       index === jobs.length - 1 ? lastJobElementRef : null
                     } // Adjusted condition for last job
+                    router={router}
                   />
                 ))}
               </div>

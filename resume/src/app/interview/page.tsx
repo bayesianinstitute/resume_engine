@@ -1,9 +1,6 @@
 "use client";
 
-import React, {  useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -11,30 +8,44 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Loader2, BookOpen, List, MessageSquare } from "lucide-react";
+import JobDescriptionForm from "@/components/ui/JobDescriptionForm";
+import { JobOpportunities } from "@/components/ui/JobOpportunities";
 import Sidebar from "@/components/ui/sidebar";
-import { useSelector } from "react-redux";
-import { useDispatch } from "react-redux";
-import { setJobDescription, setLoading, setPrepResources } from "@/lib/store/features/job/jobSlice";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  setJobDescription,
+  setLoading,
+  setPrepResources,
+} from "@/lib/store/features/job/jobSlice";
+import { RootState } from "@/lib/store/store";
+import { PrepResource } from "@/types/interview";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle, Download, List, MessageSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 
-interface PrepResource {
-  title: string;
-  content: string;
-  type: "topic" | "question" | "tip";
+import { saveAs } from "file-saver"; // Install this library with: npm install file-saver
+
+function downloadPrepResources() {
+  const fileContent = JSON.stringify(prepResources, null, 2);
+  const blob = new Blob([fileContent], { type: "application/json" });
+  saveAs(blob, "interview_preparation_resources.json");
 }
 
 export default function InterviewPreparation() {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { jobDescription, prepResources, loading } = useSelector((state) => state.jobDescription);
+  const { jobDescription, prepResources, loading } = useSelector(
+    (state: RootState) => state.jobDescription
+  );
+  const jobs = useSelector((state: RootState) => state.jobs.jobs);
+  const [selectedJob, setSelectedJob] = useState<string | null>(null);
 
-
-  // Check for authentication
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
-      router.replace("/login"); // Redirect to login if no token is found
+      router.replace("/login");
     }
   }, [router]);
 
@@ -65,7 +76,6 @@ export default function InterviewPreparation() {
       }
 
       const data = await response.json();
-      console.log(data);
       const prepResources: PrepResource[] = parsePreparationResources(
         data.preparationResources
       );
@@ -131,7 +141,6 @@ export default function InterviewPreparation() {
       }
     });
 
-    // Push the final content if any
     if (buffer.length && currentType) {
       resources.push({
         title: currentTitle,
@@ -143,111 +152,135 @@ export default function InterviewPreparation() {
     return resources;
   }
 
+  const handleJobSelect = (jobId: string) => {
+    const selectedJob = jobs.find((job) => job._id === jobId);
+    if (selectedJob) {
+      dispatch(setJobDescription(selectedJob.description));
+      setSelectedJob(jobId);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
-      <div className="flex-1 ml-64">
-        <div className="flex-1 p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
-            <h1 className="text-4xl font-extrabold text-gray-800 text-center">
-              Interview Preparation
-            </h1>
-            <p className="text-lg text-center text-gray-600 mb-6">
-              Get tailored interview preparation resources based on the job
-              description
-            </p>
-
-            <Card className="shadow-lg rounded-lg bg-white p-8">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-bold text-gray-700">
-                  Job Description Analysis
-                </CardTitle>
-                <CardDescription className="text-gray-500">
-                  Enter the job description to receive customized interview
-                  preparation resources.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="jobDescription"
-                      className="text-gray-700 font-medium"
-                    >
-                      Job Description
-                    </Label>
-                    <Textarea
-                      id="jobDescription"
-                      placeholder="Paste the job description here..."
-                      value={jobDescription}
-                      onChange={(e) => dispatch(setJobDescription(e.target.value))}
-                      rows={5}
-                      className="w-full border-gray-300 rounded-md focus:ring focus:ring-blue-200 focus:border-blue-400"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <BookOpen className="w-5 h-5 mr-2" />
-                        Generate Preparation Resources
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
+      <div className="flex-1 ml-64 p-8">
+        <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100 text-center mb-8">
+          Interview Preparation
+        </h1>
+        <p className="text-lg text-center text-gray-600 dark:text-gray-300 mb-8">
+          Get tailored interview preparation resources based on the job
+          description
+        </p>
+        <div className="max-w-6xl mx-auto space-y-8">
+          <JobOpportunities
+            jobs={jobs}
+            selectedJob={selectedJob}
+            handleJobSelect={handleJobSelect}
+          />
+          <JobDescriptionForm
+            jobDescription={jobDescription}
+            handleSubmit={handleSubmit}
+            loading={loading}
+          />
+          <AnimatePresence>
             {prepResources.length > 0 && (
-              <Card className="shadow-lg rounded-lg bg-white p-8">
-                <CardHeader className="text-center">
-                  <CardTitle className="text-2xl font-bold text-gray-700">
-                    Interview Preparation Resources
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {prepResources.map((resource, index) => (
-                      <div
-                        key={index}
-                        className="border-b border-gray-200 pb-4 last:border-b-0"
-                      >
-                        <h3 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
-                          {resource.type === "topic" && (
-                            <List className="w-5 h-5 mr-2 text-blue-500" />
-                          )}
-                          {resource.type === "question" && (
-                            <MessageSquare className="w-5 h-5 mr-2 text-green-500" />
-                          )}
-                          {resource.type === "tip" && (
-                            <BookOpen className="w-5 h-5 mr-2 text-yellow-500" />
-                          )}
-                          {resource.title}
-                        </h3>
-
-                        <div className="text-gray-600 space-y-2">
-                          {resource.content.split("\n").map((item, i) => (
-                            <p key={i}>{item.trim()}</p>
-                          ))}
-                        </div>
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="shadow-lg">
+                    <CardHeader className="flex justify-between items-center">
+                      <div>
+                        <CardTitle>Interview Preparation Resources</CardTitle>
+                        <CardDescription>
+                          Review your personalized preparation materials
+                        </CardDescription>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardHeader>
+                    <CardContent>
+                      <Tabs defaultValue="topics" className="w-full">
+                        <TabsList className="grid w-full grid-cols-3">
+                          <TabsTrigger value="topics">Key Skills</TabsTrigger>
+                          <TabsTrigger value="questions">
+                            Interview Questions
+                          </TabsTrigger>
+                          <TabsTrigger value="tips">
+                            Preparation Tips
+                          </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="topics">
+                          <ResourceList
+                            resources={prepResources.filter(
+                              (r) => r.type === "topic"
+                            )}
+                            icon={List}
+                          />
+                        </TabsContent>
+                        <TabsContent value="questions">
+                          <ResourceList
+                            resources={prepResources.filter(
+                              (r) => r.type === "question"
+                            )}
+                            icon={MessageSquare}
+                          />
+                        </TabsContent>
+                        <TabsContent value="tips">
+                          <ResourceList
+                            resources={prepResources.filter(
+                              (r) => r.type === "tip"
+                            )}
+                            icon={CheckCircle}
+                          />
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+                <Button onClick={downloadPrepResources} variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  Download File
+                </Button>
+              </>
             )}
-          </div>
+          </AnimatePresence>
+          {/* Download button */}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ResourceList({
+  resources,
+  icon: Icon,
+}: {
+  resources: PrepResource[];
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="space-y-4 mt-4">
+      {resources.map((resource, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className="border-b border-gray-200 pb-4 last:border-b-0"
+        >
+          <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center">
+            <Icon className="w-5 h-5 mr-2 text-blue-500" />
+            {resource.title}
+          </h3>
+          <div className="text-gray-600 dark:text-gray-300 space-y-2">
+            {resource.content.split("\n").map((item, i) => (
+              <p key={i}>{item.trim()}</p>
+            ))}
+          </div>
+        </motion.div>
+      ))}
     </div>
   );
 }

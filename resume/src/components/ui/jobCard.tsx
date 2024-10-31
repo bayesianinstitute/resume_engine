@@ -3,7 +3,7 @@ import { Card, CardContent } from "./card";
 import { format } from "date-fns"; // make sure date-fns is installed
 import ReactMarkdown from "react-markdown";
 import { Clock, Link, MapPin } from "lucide-react";
-import { useRouter } from "next/router";
+import { Router, useRouter } from "next/router";
 import { setJobDescription } from "../../lib/store/features/job/jobSlice";
 import { useAppDispatch, useAppSelector } from "../../lib/store/hooks";
 import { toast } from "react-toastify";
@@ -23,20 +23,21 @@ interface JobCardProps {
   index: number; // Make sure to declare index if it's being passed
   jobs: Job[]; // Assuming you need the jobs array for referencing
   lastJobElementRef: React.RefObject<HTMLDivElement>; // Type for the ref
+  router: Router; // Add this if you're using Next.js for routing
 }
 
-const JobCard = ({ job, index, jobs, lastJobElementRef }: JobCardProps) => {
+const JobCard = ({ job, index, jobs, lastJobElementRef,router }: JobCardProps) => {
   // const router = useRouter();
   const dispatch = useAppDispatch<AppDispatch>();
-  const { jobDescription, prepResources, loading } = useSelector((state:RootState) => state.jobDescription);
+  // const { jobDescription, prepResources, loading } = useSelector((state:RootState) => state.jobDescription);
 
 
 
   const handleInterviewPrepClick = () => {
     dispatch(setJobDescription(job.description)); // Dispatch job description
-    console.log(jobDescription)
-    toast(`Job ${jobDescription}`);
-    // router.push("/interview-preparation");
+    // console.log(jobDescription)
+    // toast(`Job ${jobDescription}`);
+    router.push("/interview");
   };
 
   return (
@@ -78,7 +79,10 @@ const JobCard = ({ job, index, jobs, lastJobElementRef }: JobCardProps) => {
             <Link className="w-4 h-4 mr-2" />
             View Details
           </a>
-          <button onClick={handleInterviewPrepClick}>Interview Prep </button>
+          <button onClick={handleInterviewPrepClick} className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200">
+            <Clock className="w-4 h-4 mr-2" /> {/* Added icon for Interview Prep */}
+            Interview Prep
+          </button>
           {/* <button onClick={handleInterviewPrepClick}> Resume Match</button> */}
         </div>
       </CardContent>
