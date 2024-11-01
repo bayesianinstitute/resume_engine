@@ -9,7 +9,7 @@ export default function Home() {
   useEffect(() => {
     const token = localStorage.getItem('token') // Check for token in localStorage
     if (token) {
-      router.replace('/searchjob') // Redirect to resume if token exists
+      router.replace('/uploadResume') // Redirect to resume if token exists
     } else {
       router.replace('/login') // Redirect to login page if token does not exist
     }

@@ -44,7 +44,7 @@ export default function LoginPage() {
         toast.success("Login successful!")
         
         // Redirect to the resume page or dashboard
-        router.push('/resume') 
+        router.push('/uploadResume') 
       }
 
     } catch (error) {
