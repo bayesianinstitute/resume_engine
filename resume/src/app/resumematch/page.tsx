@@ -15,20 +15,28 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Sidebar from "@/components/ui/sidebar";
 import { Briefcase, Download, FileText, Link } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { RootState } from "../../lib/store/store";
+import { AppDispatch, RootState } from "../../lib/store/store";
 import { toast } from "react-toastify";
 import { ResumeMatchResults } from "@/components/resume-match-results";
 import { MatchResult, MatchResultResponse } from "@/types/matcher";
+import useInfiniteScroll from "react-infinite-scroll-hook";
+import { fetchJobs } from "@/lib/store/features/job/jobSearch";
+import { useDispatch } from "react-redux";
 
 export default function ResumeMatcher() {
-  const [timeFilter, setTimeFilter] = useState("24h");
+  const dispatch = useDispatch<AppDispatch>();
+  const [timeFilter, setTimeFilter] = useState("week");
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectAllJobs, setSelectAllJobs] = useState(false);
   const [results, setResults] = useState<MatchResult[]>([]); // State to store matching results
   const { resumes } = useSelector((state: RootState) => state.resume);
-  const jobs = useSelector((state: RootState) => state.jobs.jobs);
+  const { jobs, loading, totalJobs } = useSelector(
+    (state: RootState) => state.jobs
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+
 
   const filteredJobs = jobs.filter((job) => {
     const jobDate = new Date(job.datePosted);
@@ -43,6 +51,22 @@ export default function ResumeMatcher() {
       default:
         return true;
     }
+  });
+  const loadMoreJobs = useCallback(() => {
+    if (!loading && jobs.length < totalJobs) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      dispatch(fetchJobs({ page: nextPage, limit: 10 }));
+    }
+  }, [currentPage, loading, jobs.length, totalJobs, dispatch]);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const hasNextPage = jobs.length < totalJobs;
+  const [sentryRef] = useInfiniteScroll({
+    loading,
+    hasNextPage,
+    onLoadMore: loadMoreJobs,
+    rootMargin: "0px 0px 400px 0px",
+    rootRef: scrollAreaRef,
   });
 
   const toggleSelectAll = (checked: boolean) => {
@@ -77,7 +101,7 @@ export default function ResumeMatcher() {
       filteredJobs.some((job) => job._id === jobId)
     );
 
-    toast(`Job ${jobIds} and resume ${resumeEntryIds}`);
+    toast(`Sent Job Matcher Request`);
 
     try {
       const response = await fetch(
@@ -91,12 +115,14 @@ export default function ResumeMatcher() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
       const data: MatchResultResponse = await response.json();
-      setResults(data.results); // Store the results in state
+      if (data.success) {
+        toast.success(data.message);
+
+        setResults(data.results); // Store the results in state
+      } else {
+        toast.error(data.message);
+      }
     } catch (error) {
       console.error("Error matching resumes:", error);
     }
@@ -202,7 +228,7 @@ export default function ResumeMatcher() {
                     </Label>
                   </div>
                 </div>
-                <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                <ScrollArea className="h-[200px] w-full rounded-md border p-4" ref={scrollAreaRef}>
                   {filteredJobs.map((job, index) => (
                     <div
                       key={job._id}
@@ -241,6 +267,11 @@ export default function ResumeMatcher() {
                       </Label>
                     </div>
                   ))}
+                  {(loading || hasNextPage) && (
+                    <div ref={sentryRef} className="text-center p-4">
+                      {loading && "Loading more jobs..."}
+                    </div>
+                  )}
                 </ScrollArea>
               </div>
             </CardContent>

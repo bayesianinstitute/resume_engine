@@ -11,6 +11,9 @@ export interface EvaluationDetails {
 
 export interface MatchResult {
   resumeEntryId: string;
+  resumeName: string;
+  jobTitle: string;
+  jobCompany:string;
   jobId: string;
   matchResult: string;
   evaluationResponse: EvaluationDetails;

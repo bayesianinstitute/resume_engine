@@ -12,6 +12,8 @@ import { ObjectId } from "mongodb";
 import { fileURLToPath } from "url";
 import { Job } from "../models/jobTracker.js";
 import { JobMatching } from "../models/JobMatching.js"; // Import your JobMatching model
+import { TryCatch } from "../middleware/error.js";
+import ErrorHandler from "../utils/utitlity.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,6 +60,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
         JSON.parse(text);
         return true;
       } catch {
+        console.log("it is not a valid JSON")
         return false;
       }
     };
@@ -83,59 +86,56 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   } catch (error) {
     console.error("Error fetching LLM evaluation:", error);
     return {
-      evaluationText:
-        "Evaluation and improvement suggestions are not available.",
-      scores: {},
-      compositeScore: null,
-      recommendation: "",
+      evaluationText: "Evaluation results not found.",
+      scores: {
+        relevance: 0,
+        skills: 0,
+        experience: 0,
+        presentation: 0,
+      },
+      compositeScore: 0,
+      recommendation: null,
     };
   }
 }
 
-export const matcher = async (req, res) => {
-  const { resumeEntryIds, jobIds } = req.body; // Expecting arrays
+export const matcher = TryCatch(async (req, res,next) => {
+  const { resumeEntryIds, jobIds, selectallJob = false, selectallResume = false } = req.body;
   const fitThreshold = 70;
 
-  console.log(resumeEntryIds, jobIds);
-
-  // Validate input
-  if (
-    !resumeEntryIds ||
-    !jobIds ||
-    !Array.isArray(resumeEntryIds) ||
-    !Array.isArray(jobIds)
-  ) {
-    return res
-      .status(400)
-      .json({
-        error: "Resume entry IDs and Job IDs are required and must be arrays.",
-      });
-  }
-
   try {
-    // Fetch all job data in one query
-    const jobDataArray = await Joblist.find({ _id: { $in: jobIds } });
-    if (!jobDataArray || jobDataArray.length === 0)
-      return res.status(404).json({ error: "No jobs found." });
+    // Fetch all jobs if selectallJob is true; otherwise, fetch based on jobIds array
+    const jobDataArray = selectallJob
+      ? await Joblist.find()
+      : await Joblist.find({ _id: { $in: jobIds } });
+    
+    if (!jobDataArray || jobDataArray.length === 0) {
+      return (next(new ErrorHandler("No jobs found.",404)));
+    }
+
+    // Fetch all resumes if selectallResume is true; otherwise, use resumeEntryIds array
+    const resumeIdsToFetch = selectallResume
+      ? (await Resume.find()).flatMap((resume) => resume.resumes.map((r) => r._id.toString()))
+      : resumeEntryIds;
+
+    if (!resumeIdsToFetch || resumeIdsToFetch.length === 0) {
+      return (next(new ErrorHandler("No resumes found.",404)));
+
+    }
 
     const results = [];
 
-    for (const resumeEntryId of resumeEntryIds) {
-      // Find the resume data
+    for (const resumeEntryId of resumeIdsToFetch) {
+      // Find the specific resume entry
       const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
       if (!resumeData) {
         results.push({ resumeEntryId, error: "Resume entry not found." });
         continue;
       }
 
-      const resumeEntry = resumeData.resumes.find(
-        (r) => r._id.toString() === resumeEntryId
-      );
+      const resumeEntry = resumeData.resumes.find((r) => r._id.toString() === resumeEntryId);
       if (!resumeEntry) {
-        results.push({
-          resumeEntryId,
-          error: "Resume entry not found in the resumes array.",
-        });
+        results.push({ resumeEntryId, error: "Resume entry not found in the resumes array." });
         continue;
       }
 
@@ -145,7 +145,7 @@ export const matcher = async (req, res) => {
       const resumeDocs = await pdfLoader.load();
       const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-      // Iterate through each job data and evaluate
+      // Evaluate each job description against the resume text
       for (const jobData of jobDataArray) {
         const jobDescription = jobData.description;
 
@@ -169,9 +169,13 @@ export const matcher = async (req, res) => {
           resultMessage = `You are not a perfect fit for the job ${jobData.title} with a score of ${compositeScore}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
         }
 
+        console.log(resumeEntry.filename)
         // Push result for each job evaluated
         results.push({
           resumeEntryId,
+          resumeName:resumeEntry.filename,
+          jobTitle:jobData.title,
+          jobCompany:jobData.company,
           jobId: jobData._id,
           matchResult: resultMessage,
           evaluationResponse: evaluationText,
@@ -180,118 +184,15 @@ export const matcher = async (req, res) => {
     }
 
     // Return all results
-    res.json({ message: "Match result", success: true, results:results });
+    res.json({ message: "Match result", success: true, results });
   } catch (error) {
     console.error("Error processing resume match:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while processing the resume match." });
+      return (next(new ErrorHandler("An error occurred while processing the resume match..",500)));
+
   }
-};
+});
 
-export const bulkMatcher = async (req, res) => {
-  const { resumeIds, jobId } = req.body;
-  const fitThreshold = 70;
 
-  if (
-    !resumeIds ||
-    !Array.isArray(resumeIds) ||
-    resumeIds.length === 0 ||
-    !jobId
-  ) {
-    return res
-      .status(400)
-      .json({ error: "An array of resume IDs and a job ID are required." });
-  }
-
-  try {
-    // Retrieve job description
-    const jobDocument = await Joblist.findById(jobId);
-    if (!jobDocument) {
-      return res.status(404).json({ error: "Job description not found." });
-    }
-    const jobDescription = jobDocument.description;
-    const jobCompany = jobDocument.company;
-
-    // Store results for CSV
-    const results = [];
-
-    // Process each resume
-    for (const resumeId of resumeIds) {
-      const resumeDocument = await Resume.findOne(
-        { "resumes._id": resumeId },
-        { "resumes.$": 1 }
-      );
-      if (!resumeDocument) {
-        console.warn(`Resume with ID ${resumeId} not found.`);
-        continue; // Skip if resume not found
-      }
-
-      const resumePath = resumeDocument.resumes[0].resume;
-      const resumeText = fs.readFileSync(path.resolve(resumePath), "utf-8");
-
-      // Call getLLMEvaluationStats to evaluate the resume
-      const evaluationResult = await getLLMEvaluationMatcher(
-        resumeText,
-        jobCompany,
-        fitThreshold
-      );
-
-      const parsedResult = {
-        "Resume ID": resumeId,
-        "First Name": evaluationResult.firstName,
-        "Last Name": evaluationResult.lastName,
-        Location: evaluationResult.location,
-        Designation: evaluationResult.designation,
-        Email: evaluationResult.email,
-        Phone: evaluationResult.phone,
-        Recommendation: evaluationResult.recommendation,
-        Score: evaluationResult.score,
-        "Job Company": jobCompany,
-      };
-
-      results.push(parsedResult);
-    }
-
-    // Convert results to CSV
-    const csvFields = [
-      { id: "Resume ID", title: "Resume ID" },
-      { id: "First Name", title: "First Name" },
-      { id: "Last Name", title: "Last Name" },
-      { id: "Location", title: "Location" },
-      { id: "Designation", title: "Designation" },
-      { id: "Email", title: "Email" },
-      { id: "Phone", title: "Phone" },
-      { id: "Recommendation", title: "Recommendation" },
-      { id: "Score", title: "Score" },
-      { id: "Job Company", title: "Job Company" },
-    ];
-    const parser = new Parser({ fields: csvFields.map((field) => field.id) });
-    const csv = parser.parse(results);
-
-    // Write CSV to file
-    const csvFilePath = path.join(
-      __dirname,
-      "../../uploads",
-      `report-${Date.now()}.csv`
-    );
-    fs.writeFileSync(csvFilePath, csv);
-
-    res
-      .status(200)
-      .json({
-        message: "Report generated successfully",
-        csvUrl: `${req.protocol}://${req.get("host")}/uploads/${path.basename(
-          csvFilePath
-        )}`,
-      });
-  } catch (error) {
-    console.error("Error processing resumes:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while processing the resumes." });
-  }
-};
 
 export const stats = async (req, res) => {
   const resumeFile = req.file;

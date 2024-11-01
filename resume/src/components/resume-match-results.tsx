@@ -44,15 +44,19 @@ export function ResumeMatchResults({ results }) {
   const columns: ColumnDef<MatchResult>[] = useMemo(
     () => [
       {
-        accessorKey: "resumeEntryId",
-        header: "Resume ID",
+        accessorKey: "resumeName",
+        header: "Resume Names",
         cell: ({ row }) => (
-          <div className="font-medium">{row.getValue("resumeEntryId")}</div>
+          <div className="font-medium">{row.getValue("resumeName")}</div>
         ),
       },
       {
-        accessorKey: "jobId",
-        header: "Job ID",
+        accessorKey: "jobTitle",
+        header: "Job Title",
+      },
+      {
+        accessorKey:"jobCompany",
+        header: "Company",
       },
       {
         accessorKey: "matchResult",
@@ -131,8 +135,9 @@ export function ResumeMatchResults({ results }) {
 
   const downloadCSV = () => {
     const headers = [
-      "Resume ID",
-      "Job ID",
+      "Resume Name",
+      "Job Title",
+      "Company Name",
       "Match Result",
       "Composite Score",
       "Relevance",
@@ -157,11 +162,11 @@ export function ResumeMatchResults({ results }) {
         // Handle cases where evaluationResponse is not valid JSON
         console.error("Error parsing evaluationResponse:", e);
       }
-
       // Use optional chaining to safely access nested properties
       return [
-        result.resumeEntryId,
-        result.jobId,
+        result.resumeName,
+        result.jobTitle,
+        result.jobCompany,
         result.matchResult,
         evaluation.compositeScore || "",
         evaluation?.scores?.relevance || "",

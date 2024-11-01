@@ -55,10 +55,10 @@ export const JobOpportunities = ({
       <CardHeader>
         <CardTitle>Job Opportunities</CardTitle>
         <CardDescription>
-          <p className="text-lg font-semibold">Total Jobs: {totalJobs}</p>
-          <p className="text-sm">
+          <span className="text-lg font-semibold">Total Jobs: {totalJobs}</span><br />
+          <span className="text-sm">
             Select a job or enter a custom description to get started.
-          </p>
+          </span>
         </CardDescription>
       </CardHeader>
       <CardContent>
