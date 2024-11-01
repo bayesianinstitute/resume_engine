@@ -9,5 +9,5 @@ export function middleware(req) {
 }
 
 export const config = {
-  matcher: ['/resume', '/dashboard'], // Add protected routes here
+  matcher: ['/resume','dashboard','/resumematch','/job','interview','/searchjob','/uploadResume'], // Add protected routes here
 }
