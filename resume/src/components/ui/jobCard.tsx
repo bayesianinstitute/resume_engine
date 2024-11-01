@@ -1,50 +1,48 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "./card";
-import { format } from "date-fns"; // make sure date-fns is installed
+import { format } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import { Clock, Link, MapPin } from "lucide-react";
 import { Router, useRouter } from "next/router";
 import { setJobDescription } from "../../lib/store/features/job/jobSlice";
-import { useAppDispatch, useAppSelector } from "../../lib/store/hooks";
-import { toast } from "react-toastify";
-import { useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/lib/store/store";
+import { useAppDispatch } from "../../lib/store/hooks";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Job {
   title: string;
   description: string;
   datePosted: Date;
   url: string;
-  location: string; // Add this if it's used
+  location: string;
 }
 
 interface JobCardProps {
   job: Job;
-  index: number; // Make sure to declare index if it's being passed
-  jobs: Job[]; // Assuming you need the jobs array for referencing
-  lastJobElementRef: React.RefObject<HTMLDivElement>; // Type for the ref
-  router: Router; // Add this if you're using Next.js for routing
+  index: number;
+  jobs: Job[];
+  lastJobElementRef: React.RefObject<HTMLDivElement>;
+  router:Router
 }
 
 const JobCard = ({ job, index, jobs, lastJobElementRef,router }: JobCardProps) => {
-  // const router = useRouter();
-  const dispatch = useAppDispatch<AppDispatch>();
-  // const { jobDescription, prepResources, loading } = useSelector((state:RootState) => state.jobDescription);
-
-
+  const dispatch = useAppDispatch();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleInterviewPrepClick = () => {
-    dispatch(setJobDescription(job.description)); // Dispatch job description
-    // console.log(jobDescription)
-    // toast(`Job ${jobDescription}`);
+    dispatch(setJobDescription(job.description));
     router.push("/interview");
   };
 
+  const handleViewDetailsClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
   return (
-    <Card
-      className="group hover:shadow-xl transition-shadow duration-200 border-0"
-      ref={jobs.length === index + 1 ? lastJobElementRef : null}
-    >
+    <Card className="group hover:shadow-xl transition-shadow duration-200 border-0">
       <CardContent className="p-6">
         <div className="space-y-4">
           <div className="flex items-start justify-between">
@@ -70,20 +68,51 @@ const JobCard = ({ job, index, jobs, lastJobElementRef,router }: JobCardProps) =
           <div className="text-gray-600 line-clamp-2">
             <ReactMarkdown>{job.description}</ReactMarkdown>
           </div>
-          <a
-            href={job.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200 mr-3"
+
+          {job.url ? (
+            <a
+              href={job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+            >
+              <Link className="w-4 h-4 mr-2" />
+              View Details
+            </a>
+          ) : (
+            <button
+              onClick={handleViewDetailsClick}
+              className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+            >
+              <Link className="w-4 h-4 mr-2" />
+              View Details
+            </button>
+          )}
+
+          <button
+            onClick={handleInterviewPrepClick}
+            className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
           >
-            <Link className="w-4 h-4 mr-2" />
-            View Details
-          </a>
-          <button onClick={handleInterviewPrepClick} className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200">
-            <Clock className="w-4 h-4 mr-2" /> {/* Added icon for Interview Prep */}
-            Interview Prep
+            <Clock className="w-4 h-4 ml-2" />  Interview Prep
           </button>
-          {/* <button onClick={handleInterviewPrepClick}> Resume Match</button> */}
+
+          <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
+            <DialogContent className="max-w-lg mx-auto p-4 sm:p-6 md:p-8 max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Job Details</DialogTitle>
+              </DialogHeader>
+              <DialogDescription>
+                <div className="mt-4">
+                  <span>{job.description}</span>
+                </div>
+              </DialogDescription>
+              <DialogFooter>
+                <button onClick={handleCloseModal} className="text-blue-600 hover:text-blue-800">
+                  Close
+                </button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardContent>
     </Card>

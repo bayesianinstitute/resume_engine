@@ -48,14 +48,7 @@ export default function JobScraper() {
     isSearching,
   } = useSelector((state: RootState) => state.jobs);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-    dispatch(fetchJobs({ page: 1, limit: 10 }));
-  }, [dispatch, router]);
+
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,9 +71,9 @@ export default function JobScraper() {
   };
   const totalPages = Math.ceil(totalJobs / 10); // Assuming 10 jobs per page
 
-  const handlePageChange = (page: number) => {
-    if (page !== currentPage) {
-      dispatch(fetchJobs(page));  // Fetch only the jobs for the new page
+  const handlePageChange = (pages: number) => {
+    if (pages !== currentPage) {
+      dispatch(fetchJobs({page:pages,limit:10}));  // Fetch only the jobs for the new page
     }
   };
   
