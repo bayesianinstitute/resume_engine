@@ -1,25 +1,23 @@
-import { useRouter } from "next/navigation";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { clearToken } from "@/lib/store/features/user/user";
+import { AppDispatch } from "@/lib/store/store";
 import {
-  Briefcase,
-  FileText,
   BarChart2,
-  List,
-  Upload,
+  FileText,
   LogOut,
-  Search,
   PlusCircle,
+  Search,
+  Upload
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
-import { AppDispatch } from "@/lib/store/store";
-import { clearToken } from "@/lib/store/features/user/user";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const Sidebar = () => {
-  const router = useRouter();
+  const pathname = usePathname(); // usePathname instead of useRouter
   const dispatch = useDispatch<AppDispatch>();
-
+  const router = useRouter()
   const onLogout = async () => {
     try {
       const response = await fetch(
@@ -34,7 +32,7 @@ const Sidebar = () => {
       }
       const data = await response.json();
       console.log(data.message);
-      dispatch(clearToken())
+      dispatch(clearToken());
       toast.success("Logged out successfully");
       router.push("/login");
     } catch (error) {
@@ -44,7 +42,7 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="min-h-screen w-64 bg-gray-900 text-white flex flex-col fixed">
+    <div className="sidebar min-h-screen w-64 bg-gray-900 text-white flex flex-col fixed">
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -55,7 +53,63 @@ const Sidebar = () => {
       </div>
       <nav className="flex-1 flex flex-col px-4 py-6">
         <div className="space-y-2 flex-1">
-          {/*
+          <Link
+            href="/resumematch"
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+              pathname === "/resumematch"
+                ? "text-white bg-gray-700"
+                : "text-gray-300 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span>Resume Match</span>
+          </Link>
+          <Link
+            href="/interview"
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+              pathname === "/interview"
+                ? "text-white bg-gray-700"
+                : "text-gray-300 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            <BarChart2 className="w-5 h-5" />
+            <span>Interview Preparation</span>
+          </Link>
+          <Link
+            href="/job"
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+              pathname === "/job"
+                ? "text-white bg-gray-700"
+                : "text-gray-300 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            <PlusCircle className="w-5 h-5" />
+            <span>Add Job</span>
+          </Link>
+          <Link
+            href="/searchjob"
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+              pathname === "/searchjob"
+                ? "text-white bg-gray-700"
+                : "text-gray-300 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            <Search className="w-5 h-5" />
+            <span>Search Job</span>
+          </Link>
+          <Link
+            href="/uploadResume"
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+              pathname === "/uploadResume"
+                ? "text-white bg-gray-700"
+                : "text-gray-300 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            <Upload className="w-5 h-5" />
+            <span>Upload Resume</span>
+          </Link>
+        </div>
+        {/*
           <Link
             href="/dashboard"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
@@ -69,51 +123,15 @@ const Sidebar = () => {
           >
             <FileText className="w-5 h-5" />
             <span>Resume Summary</span>
-          </Link> */}
-          <Link
-            href="/resumematch"
-            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
-          >
-            <FileText className="w-5 h-5" />
-            <span>Resume Match</span>
-          </Link>
-          <Link
-            href="/interview"
-            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
-          >
-            <BarChart2 className="w-5 h-5" />
-            <span>Interview Preparation</span>
-          </Link>
-          <Link
-            href="/job"
-            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
-          >
-            <PlusCircle className="w-5 h-5" />
-            {/* <List className="w-5 h-5" /> */}
-            <span>Add Job</span>
-          </Link>
-          <Link
-            href="/searchjob"
-            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
-          >
-            <Search className="w-5 h-5" />
-            <span>Search Job</span>
-          </Link>
-          {/* <Link
+          </Link> 
+           <Link
             href="/jobtracker"
             className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
           >
             <BarChart2 className="w-5 h-5" />
             <span>Job Tracker</span>
-          </Link> */}
-          <Link
-            href="/uploadResume"
-            className="flex items-center space-x-3 text-gray-300 hover:text-white hover:bg-gray-800 px-4 py-3 rounded-lg transition-colors duration-200"
-          >
-            <Upload className="w-5 h-5" />
-            <span>Upload Resume</span>
-          </Link>
-        </div>
+          </Link> 
+          */}
 
         <button
           onClick={onLogout}

@@ -23,6 +23,7 @@ import { DialogTrigger } from "@radix-ui/react-dialog";
 import { Download, XCircle } from "lucide-react"; // Import Download icon
 import React, { useCallback, useEffect, useState } from "react";
 // import { SkeletonCard } from "@/components/ui/skeleton/resume";
+import { Datanotfound } from "@/components/ui/skeleton/notfound";
 import {
   fetchResumes,
   setLoading,
@@ -33,7 +34,8 @@ import { AppDispatch, RootState } from "@/lib/store/store";
 import { Resume, ResumeApiResponse } from "@/types/resume";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
-import { Datanotfound } from "@/components/ui/skeleton/notfound";
+
+import ResumeTour from "@/components/ResumeTour";
 
 export default function ResumeViewer() {
   const [files, setFiles] = useState<File[]>([]);
@@ -162,6 +164,7 @@ export default function ResumeViewer() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      <ResumeTour />
       <Sidebar />
       <div className="flex-1 ml-64 p-6">
         <h1 className="text-4xl font-extrabold text-gray-800 text-center">
@@ -186,12 +189,12 @@ export default function ResumeViewer() {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <XCircle
-                                className="w-6 h-6 text-gray-500 absolute top-2 right-2 cursor-pointer hover:text-red-500"
+                                className="delete-button w-6 h-6 text-gray-500 absolute top-2 right-2 cursor-pointer hover:text-red-500"
                                 onClick={() => setOpen(true)}
                               />
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Delete Resume</p>
+                              <p >Delete Resume</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -225,10 +228,10 @@ export default function ResumeViewer() {
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
-                    <TooltipProvider>
+                    <TooltipProvider >
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <CardContent
+                          <CardContent className="analyze-button"
                             onClick={() => dispatch(setSelectedResume(resume))}
                           >
                             <CardTitle className="text-lg font-bold text-gray-800 mt-4 mr-4">
@@ -260,11 +263,11 @@ export default function ResumeViewer() {
           </div>
 
           <div className="w-1/3 ml-6">
-            <Card>
+            <Card className="upload-section">
               <CardTitle className="text-xl font-bold text-gray-800 p-4">
                 Upload New Resume
               </CardTitle>
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-6 space-y-4" id="upload-section">
                 <div
                   className="border-2 border-dashed rounded-lg flex flex-col gap-1 p-6 items-center border-gray-200"
                   onDragOver={onDragOver}
