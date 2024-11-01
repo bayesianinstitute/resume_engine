@@ -21,45 +21,36 @@ import {
 } from "@/components/ui/tooltip";
 import { DialogTrigger } from "@radix-ui/react-dialog";
 import { Download, XCircle } from "lucide-react"; // Import Download icon
-import { useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
 // import { SkeletonCard } from "@/components/ui/skeleton/resume";
-import { setToken } from "@/lib/store/features/user/user";
+import {
+  fetchResumes,
+  setLoading,
+  setResumes,
+  setSelectedResume
+} from "@/lib/store/features/resume/resumeSlice";
 import { AppDispatch, RootState } from "@/lib/store/store";
 import { Resume, ResumeApiResponse } from "@/types/resume";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
-import { fetchResumes, setErrorMessage, setLoading, setResumes, setSelectedResume } from "@/lib/store/features/resume/resumeSlice";
+import { Datanotfound } from "@/components/ui/skeleton/notfound";
 
 export default function ResumeViewer() {
   const [files, setFiles] = useState<File[]>([]);
-  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const dispatch = useDispatch<AppDispatch>();
   const auth = useSelector((state: RootState) => state.auth);
 
-  const { resumes, selectedResume, errorMessage, loading } = useSelector(
+  const { resumes, selectedResume,  loading } = useSelector(
     (state: RootState) => state.resume
   );
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    // console.log("storedToken",storedToken);
-    if (storedToken) {
-      dispatch(setToken(storedToken));
-    } else {
-      router.replace("/login");
-    }
-  }, [router, dispatch]);
-
-  useEffect(() => {
     if (auth.userId && auth.token) {
-      dispatch(fetchResumes(auth.userId)); 
+      dispatch(fetchResumes(auth.userId));
     }
-  }, [auth.userId, auth.token,dispatch]);
-
-
+  }, [auth.userId, auth.token, dispatch]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -84,19 +75,19 @@ export default function ResumeViewer() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-
     if (files.length === 0) {
-      dispatch(setErrorMessage("Please upload a resume."));
+      toast.warning(`Please upload a resume select`)
+      // dispatch(setErrorMessage("Please upload a resume."));
       return;
     }
-
+    
     const formData = new FormData();
     formData.append("resume", files[0]);
-    formData.append("userId", auth.userId);
+    formData.append("userId", auth.userId!);
 
     try {
       dispatch(setLoading(true));
-      dispatch(setErrorMessage(null));
+      // dispatch(setErrorMessage(null));
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/resume/stats`,
@@ -109,18 +100,18 @@ export default function ResumeViewer() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to upload and analyze resume.");
-      }
       const result: ResumeApiResponse = await response.json();
-      toast(result.message);
-      dispatch(setResumes(result.data.resumes));
-
-      // await fetchAllResumes();
-      setFiles([]);
+      if (result.success) {
+        toast.success(result.message);
+        dispatch(setResumes(result.data.resumes));
+        setFiles([]);
+      } else {
+        toast.error(result.message);
+      }
     } catch (error) {
       console.error("Error:", error);
-      dispatch(setErrorMessage("An error occurred while uploading the resume."));
+      toast.error("An error occurred while uploading the resume.");
+      // dispatch(setErrorMessage());
     } finally {
       dispatch(setLoading(false));
     }
@@ -140,7 +131,6 @@ export default function ResumeViewer() {
   };
 
   const handleDeleteResume = async (resume: Resume) => {
-
     try {
       const userId = auth.userId;
       const response = await fetch(
@@ -154,18 +144,19 @@ export default function ResumeViewer() {
           body: JSON.stringify({ userId, resume: resume.resume }),
         }
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to delete resume.");
-      }
       const result: ResumeApiResponse = await response.json();
-      toast(result.message);
-      dispatch(setResumes(result.data.resumes));
+      if (result.success) {
+        toast.success(result.message);
+        dispatch(setResumes(result.data.resumes));
+      } else {
+        toast.error(result.message);
+      }
 
       // await fetchAllResumes();
     } catch (error) {
       console.error("Error:", error);
-      dispatch(setErrorMessage("An error occurred while deleting the resume."));
+      toast.error("An error occurred while deleting the resume.");
+      // dispatch(setErrorMessage());
     }
   };
 
@@ -224,7 +215,10 @@ export default function ResumeViewer() {
                           <Button
                             type="button"
                             variant="destructive"
-                            onClick={() => handleDeleteResume(resume)}
+                            onClick={async () => {
+                              await handleDeleteResume(resume);
+                              setOpen(false); // Close the dialog after deletion
+                            }}
                           >
                             Delete
                           </Button>
@@ -254,17 +248,15 @@ export default function ResumeViewer() {
                   </Card>
                 ))
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mx-auto max-w-5xl">
-                  <h1>No Data Found</h1>
-                </div>
+                  <Datanotfound msg="No Resume Found" />
               )}
             </div>
 
-            {errorMessage && (
+            {/* {errorMessage && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-6 text-center">
                 <p>{errorMessage}</p>
               </div>
-            )}
+            )} */}
           </div>
 
           <div className="w-1/3 ml-6">

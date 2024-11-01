@@ -13,11 +13,15 @@ export interface Resume {
 
 export interface ResumeApi {
   userId: string;
-  resumes: Resume;
+  resumes: Resume[];
 }
 
-export interface ResumeApiResponse {
-  success: boolean;
+export interface defaultResponse{
+  success:boolean;
   message: string;
+}
+
+export interface ResumeApiResponse extends defaultResponse {
   data: ResumeApi;
+  resumeId:string;
 }

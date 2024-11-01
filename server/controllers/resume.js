@@ -60,7 +60,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
         JSON.parse(text);
         return true;
       } catch {
-        console.log("it is not a valid JSON")
+        console.log("it is not a valid JSON");
         return false;
       }
     };
@@ -99,8 +99,13 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   }
 }
 
-export const matcher = TryCatch(async (req, res,next) => {
-  const { resumeEntryIds, jobIds, selectallJob = false, selectallResume = false } = req.body;
+export const matcher = TryCatch(async (req, res, next) => {
+  const {
+    resumeEntryIds,
+    jobIds,
+    selectallJob = false,
+    selectallResume = false,
+  } = req.body;
   const fitThreshold = 70;
 
   try {
@@ -108,19 +113,20 @@ export const matcher = TryCatch(async (req, res,next) => {
     const jobDataArray = selectallJob
       ? await Joblist.find()
       : await Joblist.find({ _id: { $in: jobIds } });
-    
+
     if (!jobDataArray || jobDataArray.length === 0) {
-      return (next(new ErrorHandler("No jobs found.",404)));
+      return next(new ErrorHandler("No jobs found.", 404));
     }
 
     // Fetch all resumes if selectallResume is true; otherwise, use resumeEntryIds array
     const resumeIdsToFetch = selectallResume
-      ? (await Resume.find()).flatMap((resume) => resume.resumes.map((r) => r._id.toString()))
+      ? (await Resume.find()).flatMap((resume) =>
+          resume.resumes.map((r) => r._id.toString())
+        )
       : resumeEntryIds;
 
     if (!resumeIdsToFetch || resumeIdsToFetch.length === 0) {
-      return (next(new ErrorHandler("No resumes found.",404)));
-
+      return next(new ErrorHandler("No resumes found.", 404));
     }
 
     const results = [];
@@ -133,9 +139,14 @@ export const matcher = TryCatch(async (req, res,next) => {
         continue;
       }
 
-      const resumeEntry = resumeData.resumes.find((r) => r._id.toString() === resumeEntryId);
+      const resumeEntry = resumeData.resumes.find(
+        (r) => r._id.toString() === resumeEntryId
+      );
       if (!resumeEntry) {
-        results.push({ resumeEntryId, error: "Resume entry not found in the resumes array." });
+        results.push({
+          resumeEntryId,
+          error: "Resume entry not found in the resumes array.",
+        });
         continue;
       }
 
@@ -169,13 +180,13 @@ export const matcher = TryCatch(async (req, res,next) => {
           resultMessage = `You are not a perfect fit for the job ${jobData.title} with a score of ${compositeScore}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
         }
 
-        console.log(resumeEntry.filename)
+        console.log(resumeEntry.filename);
         // Push result for each job evaluated
         results.push({
           resumeEntryId,
-          resumeName:resumeEntry.filename,
-          jobTitle:jobData.title,
-          jobCompany:jobData.company,
+          resumeName: resumeEntry.filename,
+          jobTitle: jobData.title,
+          jobCompany: jobData.company,
           jobId: jobData._id,
           matchResult: resultMessage,
           evaluationResponse: evaluationText,
@@ -187,20 +198,22 @@ export const matcher = TryCatch(async (req, res,next) => {
     res.json({ message: "Match result", success: true, results });
   } catch (error) {
     console.error("Error processing resume match:", error);
-      return (next(new ErrorHandler("An error occurred while processing the resume match..",500)));
-
+    return next(
+      new ErrorHandler(
+        "An error occurred while processing the resume match..",
+        500
+      )
+    );
   }
 });
 
-
-
-export const stats = async (req, res) => {
+export const stats = TryCatch(async (req, res, next) => {
   const resumeFile = req.file;
   const { userId } = req.body;
   const fileName = resumeFile.originalname;
 
   if (!resumeFile) {
-    return res.status(400).json({ error: "Resume file is required." });
+    return next(new ErrorHandler("Resume file is required.", 400));
   }
 
   // Define the uploads directory inside the `server` folder
@@ -264,11 +277,11 @@ export const stats = async (req, res) => {
     });
   } catch (error) {
     console.error("Error processing resume:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while processing the resume." });
+    return next(
+      new ErrorHandler("An error occurred while processing the resume.", 500)
+    );
   }
-};
+});
 
 export const resumeview = async (req, res) => {
   const { userId, fileName } = req.params;
@@ -295,21 +308,26 @@ export const resumeview = async (req, res) => {
       fs.createReadStream(resumeFilePath).pipe(res);
     } else {
       // Send a 404 response if the file does not exist
-      res.status(404).json({ error: "File not found" });
+      return next(new ErrorHandler("File not found", 400));
     }
   } catch (error) {
     console.error("Error serving resume:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while fetching the resume file." });
+    return next(
+      new ErrorHandler("An error occurred while fetching the resume file.", 500)
+    );
   }
 };
 
-export const getAllResumes = async (req, res) => {
+export const getAllResumes = TryCatch(async (req, res, next) => {
   const { userId } = req.query;
 
   if (!userId) {
-    return res.status(400).json({ error: "User ID is required." });
+    return next(
+      new ErrorHandler(
+        "An error occurred while processing the resume match..",
+        400
+      )
+    );
   }
 
   try {
@@ -317,10 +335,9 @@ export const getAllResumes = async (req, res) => {
     const resumeData = await Resume.findOne({ userId }).lean();
 
     if (!resumeData) {
-      return res.status(404).json({
-        success: false,
-        message: "No resumes found for the given user ID.",
-      });
+      return next(
+        new ErrorHandler("No resumes found for the given user ID.", 404)
+      );
     }
 
     // Format the resumes data for response
@@ -335,25 +352,23 @@ export const getAllResumes = async (req, res) => {
     }));
 
     res.status(200).json({
+      message: "Resumes retrieved successfully!",
       success: true,
       data: resumes,
     });
   } catch (error) {
     console.error("Error fetching resumes:", error);
-    res.status(500).json({
-      success: false,
-      message: "An error occurred while fetching resumes.",
-    });
+    return next(
+      new ErrorHandler("An error occurred while fetching resumes.", 500)
+    );
   }
-};
+});
 
-export const deleteResume = async (req, res) => {
+export const deleteResume = TryCatch(async (req, res, next) => {
   const { userId, resume } = req.body;
 
   if (!userId || !resume) {
-    return res
-      .status(400)
-      .json({ error: "User ID and file name are required." });
+    return next(new ErrorHandler("User ID and file name are required.", 400));
   }
 
   try {
@@ -365,7 +380,7 @@ export const deleteResume = async (req, res) => {
     if (fs.existsSync(resumeFilePath)) {
       fs.unlinkSync(resumeFilePath); // Remove the file from the server
     } else {
-      return res.status(404).json({ error: "File not found on the server." });
+      return next(new ErrorHandler("File not found on the server.", 400));
     }
 
     // Remove the resume reference from the database
@@ -388,11 +403,11 @@ export const deleteResume = async (req, res) => {
     });
   } catch (error) {
     console.error("Error deleting resume:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while deleting the resume." });
+    return next(
+      new ErrorHandler("An error occurred while deleting the resume.", 500)
+    );
   }
-};
+});
 
 // Helper function to get embeddings for text chunks
 async function getEmbeddingsForChunks(chunks) {

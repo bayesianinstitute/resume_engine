@@ -1,6 +1,7 @@
 // components/ResumeMatcher.tsx
 "use client";
 
+import { ResumeMatchResults } from "@/components/resume-match-results";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,16 +15,18 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Sidebar from "@/components/ui/sidebar";
-import { Briefcase, Download, FileText, Link } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
-import { useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../lib/store/store";
-import { toast } from "react-toastify";
-import { ResumeMatchResults } from "@/components/resume-match-results";
-import { MatchResult, MatchResultResponse } from "@/types/matcher";
-import useInfiniteScroll from "react-infinite-scroll-hook";
 import { fetchJobs } from "@/lib/store/features/job/jobSearch";
-import { useDispatch } from "react-redux";
+import { fetchResumes } from "@/lib/store/features/resume/resumeSlice";
+import { MatchResult, MatchResultResponse } from "@/types/matcher";
+import { Briefcase, FileText, Link, Upload } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useInfiniteScroll from "react-infinite-scroll-hook";
+import { useDispatch, useSelector } from "react-redux";
+import { toast } from "react-toastify";
+import { AppDispatch, RootState } from "../../lib/store/store";
+
+import { useRouter } from 'next/navigation';
+
 
 export default function ResumeMatcher() {
   const dispatch = useDispatch<AppDispatch>();
@@ -36,7 +39,20 @@ export default function ResumeMatcher() {
     (state: RootState) => state.jobs
   );
   const [currentPage, setCurrentPage] = useState(1);
+  const auth = useSelector((state: RootState) => state.auth);
+  const router = useRouter();
 
+  useEffect(() => {
+    // Fetch jobs if not already in store
+    if (!jobs.length) {
+      dispatch(fetchJobs({ page: 1, limit: 10 }));
+    }
+
+    // Fetch resumes if not already in store
+    if (!resumes.length && auth.userId) {
+      dispatch(fetchResumes(auth.userId));
+    }
+  }, [dispatch, jobs.length, auth.userId, resumes.length]);
 
   const filteredJobs = jobs.filter((job) => {
     const jobDate = new Date(job.datePosted);
@@ -165,25 +181,38 @@ export default function ResumeMatcher() {
                   </Label>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 ml-4">
-                  {resumes.map((resume) => (
-                    <div
-                      key={resume.resume}
-                      className="flex items-center space-x-2"
-                    >
-                      <Checkbox
-                        id={resume.resumeId}
-                        checked={selectedJobs.includes(resume.resumeId)}
-                        onCheckedChange={() => toggleResume(resume.resumeId)}
-                      />
-                      <Label
-                        htmlFor={resume.resumeId}
-                        className="text-sm leading-none flex items-center"
+                  {resumes.length === 0 ? (
+                    <div>
+                      <span className="text-red-500 mb-10">No Resume Found. Please upload your resume before proceeding.</span>
+                      <Button
+                        onClick={async () => await router.push("/uploadResume")}
+                        variant="outline"
                       >
-                        <FileText className="h-4 w-4 mr-2" />
-                        {resume.filename}
-                      </Label>
+                        <Upload className=" mr-2 h-4 w-4" />
+                        Upload Resume
+                      </Button>
                     </div>
-                  ))}
+                  ) : (
+                    resumes.map((resume) => (
+                      <div
+                        key={resume.resumeId}
+                        className="flex items-center space-x-2"
+                      >
+                        <Checkbox
+                          id={resume.resumeId}
+                          checked={selectedJobs.includes(resume.resumeId)}
+                          onCheckedChange={() => toggleResume(resume.resumeId)}
+                        />
+                        <Label
+                          htmlFor={resume.resumeId}
+                          className="text-sm leading-none flex items-center"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          {resume.filename}
+                        </Label>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -228,7 +257,10 @@ export default function ResumeMatcher() {
                     </Label>
                   </div>
                 </div>
-                <ScrollArea className="h-[200px] w-full rounded-md border p-4" ref={scrollAreaRef}>
+                <ScrollArea
+                  className="h-[200px] w-full rounded-md border p-4"
+                  ref={scrollAreaRef}
+                >
                   {filteredJobs.map((job, index) => (
                     <div
                       key={job._id}

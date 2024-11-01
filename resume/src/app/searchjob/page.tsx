@@ -48,6 +48,15 @@ export default function JobScraper() {
     isSearching,
   } = useSelector((state: RootState) => state.jobs);
 
+  
+  useEffect(() => {
+    // Fetch jobs if not already in store
+    if (!jobs.length) {
+      dispatch(fetchJobs({ page: 1, limit: 10 }));
+    }
+
+
+  }, [dispatch, jobs.length]);
 
 
   const handleSearch = async (event: React.FormEvent) => {

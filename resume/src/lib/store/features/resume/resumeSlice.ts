@@ -29,9 +29,13 @@ export const fetchResumes = createAsyncThunk<ResumeApiResponse, string>(
 
         throw new Error(errorData.message || "Failed to fetch resumes");
       }
+      console.log(response)
       return await response.json();
-    } catch (error: any) {
-      return rejectWithValue(error.message || "An unknown error occurred");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return rejectWithValue(error.message || "An unknown error occurred");
+      }
+      return rejectWithValue("An unknown error occurred");
     }
   }
 );

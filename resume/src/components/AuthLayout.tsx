@@ -17,8 +17,7 @@ export default function AuthLayout({
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const auth = useSelector((state: RootState) => state.auth)
-  const jobs = useSelector((state: RootState) => state.jobs)
-  const resumes = useSelector((state: RootState) => state.resume)
+
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -33,16 +32,8 @@ export default function AuthLayout({
       dispatch(setToken(token))
     }
 
-    // Fetch jobs if not already in store
-    if (!jobs.jobs.length) {
-      dispatch(fetchJobs({ page: 1, limit: 10 }))
-    }
 
-    // Fetch resumes if not already in store
-    if (!resumes.resumes?.length && auth.userId) {
-      dispatch(fetchResumes(auth.userId))
-    }
-  }, [dispatch, auth.token, auth.userId, jobs.jobs, resumes.resumes, router])
+  }, [dispatch, auth.token, auth.userId,  router])
 
   // Show loading state while checking auth
 //   if (!auth.token) {

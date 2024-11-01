@@ -32,9 +32,7 @@ import {
   SortingState,
 } from "@tanstack/react-table";
 import { Progress } from "@/components/ui/progress";
-import { MatchResult } from "@/types/matcher";
-
-
+import { EvaluationDetails, MatchResult } from "@/types/matcher";
 
 export function ResumeMatchResults({ results }) {
   const [expandedRows, setExpandedRows] = useState<number[]>([]);
@@ -55,7 +53,7 @@ export function ResumeMatchResults({ results }) {
         header: "Job Title",
       },
       {
-        accessorKey:"jobCompany",
+        accessorKey: "jobCompany",
         header: "Company",
       },
       {
@@ -86,8 +84,24 @@ export function ResumeMatchResults({ results }) {
         accessorKey: "evaluationResponse",
         header: "Score(%)",
         cell: ({ row }) => {
-          const evaluation =
-            JSON.parse(row.original.evaluationResponse) || "Error";
+          let evaluation: EvaluationDetails;
+          try {
+            evaluation = JSON.parse(row.original.evaluationResponse);
+            console.log("evaluation : ", evaluation);
+          } catch (err) {
+            console.error("Error parsing JSON : ", err);
+            evaluation = {
+              scores: {
+                relevance: 0,
+                skills: 0,
+                experience: 0,
+                presentation: 0,
+              },
+              compositeScore: 0,
+              recommendation: "Something went wrong with the recommendation",
+            };
+          }
+
           console.log("evaluation : ", evaluation);
           const compositeScore = evaluation.compositeScore || 0;
           return (
@@ -139,47 +153,62 @@ export function ResumeMatchResults({ results }) {
       "Job Title",
       "Company Name",
       "Match Result",
-      "Composite Score",
+      "compositeScore",
       "Relevance",
       "Skills",
       "Experience",
       "Presentation",
       "Recommendation",
     ];
+
     const csvContent = table.getFilteredRowModel().rows.map((row) => {
       const result = row.original;
       let cleanMatchResult = result.matchResult;
-      if (typeof cleanMatchResult === "string") {
-        cleanMatchResult = cleanMatchResult.replace(/\n/g, " "); // Replace newlines with spaces
-      }
 
+      // Safely parse evaluationResponse
       let evaluation = {};
       try {
-        evaluation = JSON.parse(result.evaluationResponse);
-        console.log("success evaluation", evaluation);
-        console.log("evaluation recommandation", evaluation.recommendation);
+        // First, try to parse as JSON
+        evaluation =
+          typeof result.evaluationResponse === "string"
+            ? JSON.parse(result.evaluationResponse)
+            : result.evaluationResponse;
       } catch (e) {
-        // Handle cases where evaluationResponse is not valid JSON
         console.error("Error parsing evaluationResponse:", e);
+        evaluation = {};
       }
-      // Use optional chaining to safely access nested properties
-      return [
-        result.resumeName,
-        result.jobTitle,
-        result.jobCompany,
-        result.matchResult,
+
+      // Safely extract scores
+      const scores = evaluation.scores || {};
+
+      // Prepare CSV row values
+      const csvRow = [
+        result.resumeName || "",
+        result.jobTitle || "",
+        result.jobCompany || "",
+        cleanMatchResult ? cleanMatchResult.replace(/,/g, ";") : "", // Replace commas to avoid CSV parsing issues
         evaluation.compositeScore || "",
-        evaluation?.scores?.relevance || "",
-        evaluation?.scores?.skills || "",
-        evaluation?.scores?.experience || "",
-        evaluation?.scores?.presentation || "",
-        evaluation.recommendation || "",
-      ].join(",");
+        scores.relevance || "",
+        scores.skills || "",
+        scores.experience || "",
+        scores.presentation || "",
+        evaluation.recommendation
+          ? evaluation.recommendation.replace(/,/g, ";")
+          : "", // Replace commas
+      ];
+
+      // Escape double quotes and join with comma
+      return csvRow
+        .map((field) =>
+          typeof field === "string" ? `"${field.replace(/"/g, '""')}"` : field
+        )
+        .join(",");
     });
 
     const csv = [headers.join(","), ...csvContent].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
+
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
@@ -221,9 +250,6 @@ export function ResumeMatchResults({ results }) {
                   table.getColumn("matchResult")?.setFilterValue(value)
                 }
               >
-                <SelectTrigger id="fitFilter" className="w-[180px]">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All</SelectItem>
                   <SelectItem value="good fit">Good Fit</SelectItem>
@@ -294,57 +320,67 @@ export function ResumeMatchResults({ results }) {
                               Evaluation Details
                             </h4>
                             {(() => {
-                              // Immediately Invoked Function Expression (IIFE)
+                              let evaluation: EvaluationDetails;
                               try {
-                                const evaluation = JSON.parse(
+                                evaluation = JSON.parse(
                                   row.original.evaluationResponse
-                                ); // Try parsing
-                                return (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <p>
-                                        <strong>Composite Score:</strong>{" "}
-                                        {evaluation.compositeScore}%
-                                      </p>
-                                      <p>
-                                        <strong>Relevance:</strong>{" "}
-                                        {evaluation?.scores?.relevance || ""}%
-                                      </p>{" "}
-                                      {/* Optional chaining */}
-                                      <p>
-                                        <strong>Skills:</strong>{" "}
-                                        {evaluation?.scores?.skills || ""}%
-                                      </p>{" "}
-                                      {/* Optional chaining */}
-                                    </div>
-                                    <div className="space-y-2">
-                                      <p>
-                                        <strong>Experience:</strong>{" "}
-                                        {evaluation?.scores?.experience || ""}%
-                                      </p>{" "}
-                                      {/* Optional chaining */}
-                                      <p>
-                                        <strong>Presentation:</strong>{" "}
-                                        {evaluation?.scores?.presentation || ""}
-                                        %
-                                      </p>{" "}
-                                      {/* Optional chaining */}
-                                    </div>
-                                    {evaluation.recommendation && (
-                                      <div className="col-span-full">
-                                        <p>
-                                          <strong>Recommendation:</strong>{" "}
-                                          {evaluation.recommendation}
-                                        </p>
-                                      </div>
-                                    )}
-                                  </div>
                                 );
-                              } catch (e) {
-                                // Catch parsing errors
-                                // Display the string if parsing fails
-                                return <p>{row.original.evaluationResponse}</p>;
+                                console.log("evaluation : ", evaluation);
+                              } catch (err) {
+                                console.error("Error parsing JSON : ", err);
+                                evaluation = {
+                                  scores: {
+                                    relevance: 0,
+                                    skills: 0,
+                                    experience: 0,
+                                    presentation: 0,
+                                  },
+                                  compositeScore: 0,
+                                  recommendation:
+                                    "Something went wrong with the recommendation",
+                                };
                               }
+
+                              return (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <p>
+                                      <strong>Composite Score:</strong>{" "}
+                                      {evaluation.compositeScore}%
+                                    </p>
+                                    <p>
+                                      <strong>Relevance:</strong>{" "}
+                                      {evaluation?.scores?.relevance || ""}%
+                                    </p>{" "}
+                                    {/* Optional chaining */}
+                                    <p>
+                                      <strong>Skills:</strong>{" "}
+                                      {evaluation?.scores?.skills || ""}%
+                                    </p>{" "}
+                                    {/* Optional chaining */}
+                                  </div>
+                                  <div className="space-y-2">
+                                    <p>
+                                      <strong>Experience:</strong>{" "}
+                                      {evaluation?.scores?.experience || ""}%
+                                    </p>{" "}
+                                    {/* Optional chaining */}
+                                    <p>
+                                      <strong>Presentation:</strong>{" "}
+                                      {evaluation?.scores?.presentation || ""}%
+                                    </p>{" "}
+                                    {/* Optional chaining */}
+                                  </div>
+                                  {evaluation.recommendation && (
+                                    <div className="col-span-full">
+                                      <p>
+                                        <strong>Recommendation:</strong>{" "}
+                                        {evaluation.recommendation}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
                             })()}
                           </div>
                         </TableCell>
