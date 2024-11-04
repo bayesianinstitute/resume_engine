@@ -7,19 +7,13 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Job } from "@/types/job";
 import { Label } from "@radix-ui/react-label";
 import { Briefcase, Link } from "lucide-react";
 import { useRef } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 
-interface Job {
-  _id: string;
-  title: string;
-  description: string;
-  company?: string;
-  datePosted: string;
-  url: string;
-}
+
 
 interface JobOpportunitiesProps {
   jobs: Job[];
@@ -47,7 +41,6 @@ export const JobOpportunities = ({
     hasNextPage,
     onLoadMore,
     rootMargin: "0px 0px 400px 0px",
-    rootRef: scrollAreaRef,
   });
 
   return (

@@ -1,23 +1,17 @@
 // redux/jobSlice.ts
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../../store";
+import { Job } from "@/types/job";
+// import { format } from "date-fns";
 
-interface SearchJob {
+
+export interface SearchJob {
   jobTitle: string | null;
   jobLocation: string | null;
-  datePosted: string | null; // Update to allow null values
+  datePosted: Date; // Update to allow null values
 }
 
-interface Job {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  datePosted: string;
-  experienceLevel: string;
-  description: string;
-  url: string;
-}
+
 
 interface JobsState {
   jobs: Job[];
@@ -26,7 +20,8 @@ interface JobsState {
   error: string | null;
   jobTitle: string; // Add jobTitle to state
   jobLocation: string; // Add jobLocation to state
-  datePosted: Date | null; // Add datePosted to state
+  datePosted: Date ; // Add datePosted to state
+  currentPage: number;
 }
 
 const initialState: JobsState = {
@@ -36,7 +31,8 @@ const initialState: JobsState = {
   error: null,
   jobTitle: '', // Initialize as empty string
   jobLocation: '', // Initialize as empty string
-  datePosted: null, // Initialize as null
+  datePosted: new Date(), // Set current date
+  currentPage:1
 };
 
 export const searchJobs = createAsyncThunk(
@@ -44,16 +40,33 @@ export const searchJobs = createAsyncThunk(
   async (_, { getState }) => {
     const state = getState() as RootState;
     const { jobTitle, jobLocation, datePosted } = state.jobs; // Destructure from state
-    const filteredJobs = state.jobs.jobs.filter((job) => {
-      return (
-        (jobTitle ? job.title.includes(jobTitle) : true) &&
-        (jobLocation ? job.location.includes(jobLocation) : true) &&
-        (datePosted ? job.datePosted === datePosted : true)
-      );
-    });
-    return { joblists: filteredJobs, totalJoblists: filteredJobs.length };
+    
+    // Prepare the search parameters for the request body
+    const searchParams = {
+      title: jobTitle,
+      location: jobLocation || null,
+      datePosted: datePosted.toISOString() ,
+    };
+
+    // Send the search parameters in the request body
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_URL}/job/search`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(searchParams),
+      }
+    );
+
+    if (!response.ok) throw new Error("Failed to search jobs");
+
+    const data = await response.json();
+    return { joblists: data, totalJoblists: data.length }; // Adjusted to match your API response
   }
 );
+
 
 export const clearSearch = createAsyncThunk(
   "jobs/clearSearch",
@@ -92,7 +105,7 @@ const jobSlice = createSlice({
     setJobLocation(state, action: PayloadAction<string>) {
       state.jobLocation = action.payload;
     },
-    setDatePosted(state, action: PayloadAction<Date | null>) {
+    setDatePosted(state, action: PayloadAction<Date>) {
       state.datePosted = action.payload;
     },
   },
@@ -117,8 +130,12 @@ const jobSlice = createSlice({
         state.error = action.payload as string;
       })
       .addCase(searchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
+        console.log(action.payload.joblists)
+        console.log(action.payload.totalJoblists)
         state.jobs = action.payload.joblists;
         state.totalJobs = action.payload.totalJoblists;
+        state.loading = false;
+ 
       });
   },
 });

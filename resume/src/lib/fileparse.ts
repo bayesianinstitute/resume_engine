@@ -2,7 +2,7 @@ import { PrepResource } from "@/types/interview";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { jsPDF } from "jspdf";
 import { saveAs } from "file-saver";
-import {marked} from "marked";
+import { marked } from "marked";
 
 export function parsePreparationResources(text: string): PrepResource[] {
   const lines = text
@@ -98,72 +98,67 @@ export const downloadPrepResourcePDF = (prepResources: PrepResource[]) => {
   doc.save("interview_preparation_resources.pdf");
 };
 
-export const downloadPrepResourcesDocx = (prepResources: PrepResource[]) => {
+const convertMarkdownToParagraphs = async (markdown: string): Promise<Paragraph[]> => {
+  const htmlContent =await marked(markdown);
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlContent, "text/html");
+  const paragraphs = Array.from(doc.body.childNodes).filter(
+    (node): node is Element => node.nodeType === Node.ELEMENT_NODE
+  );
+
+  return paragraphs.flatMap((element) => {
+    if (element.nodeName === "P") {
+      return new Paragraph({
+        children: [new TextRun(element.textContent || "")],
+      });
+    } else if (element.nodeName === "UL") {
+      return Array.from(element.children).map(
+        (li) =>
+          new Paragraph({
+            children: [new TextRun(`• ${li.textContent || ""}`)],
+          })
+      );
+    } else {
+      return [];
+    }
+  });
+};
+
+export const downloadPrepResourcesDocx = async (prepResources: PrepResource[]) => {
   if (!prepResources || prepResources.length === 0) {
     alert("No preparation resources to download.");
     return;
   }
 
-  // Create a new document
-  const doc = new Document({
-    sections: [
-      {
-        properties: {},
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "Interview Preparation Resources",
-                bold: true,
-                size: 32,
-              }),
-            ],
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "Tailored resources based on the job description:",
-              }),
-            ],
-          }),
-        ],
-      },
-    ],
-  });
+  // Initialize sections with the title
+  const sections = [
+    {
+      properties: {},
+      children: [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "Interview Preparation Resources",
+              bold: true,
+              size: 32,
+            }),
+          ],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "Tailored resources based on the job description:",
+            }),
+          ],
+        }),
+      ],
+    },
+  ];
 
-  const convertMarkdownToParagraphs = (markdown) => {
-    const htmlContent = marked(markdown);
-    console.log("Converted HTML:", htmlContent);
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlContent, "text/html");
-    const paragraphs = Array.from(doc.body.childNodes);
-    console.log(
-      "Extracted elements:",
-      paragraphs.map((p) => p.outerHTML)
-    );
-
-    return paragraphs.flatMap((element) => {
-      if (element.nodeName === "P") {
-        return new Paragraph({
-          children: [new TextRun(element.textContent)],
-        });
-      } else if (element.nodeName === "UL") {
-        return Array.from(element.children).map(
-          (li) =>
-            new Paragraph({
-              children: [new TextRun(`• ${li.textContent}`)],
-            })
-        );
-      } else {
-        return [];
-      }
-    });
-  };
-
-  prepResources.forEach((resource) => {
-    console.log("Resource:", resource);
-    doc.addSection({
+  // Add each resource section
+  for (const resource of prepResources) {
+    const resourceContentParagraphs = await convertMarkdownToParagraphs(resource.content);
+    sections.push({
       properties: {},
       children: [
         new Paragraph({
@@ -175,12 +170,18 @@ export const downloadPrepResourcesDocx = (prepResources: PrepResource[]) => {
             }),
           ],
         }),
-        ...convertMarkdownToParagraphs(resource.content),
+        ...resourceContentParagraphs,
         new Paragraph({ text: "" }), // Add a blank line for spacing
       ],
     });
+  }
+
+  // Create the document with all sections at once
+  const doc = new Document({
+    sections,
   });
 
+  // Save the document as a .docx file
   Packer.toBlob(doc).then((blob) => {
     saveAs(blob, "interview_preparation_resources.docx");
   });

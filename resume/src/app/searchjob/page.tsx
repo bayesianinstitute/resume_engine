@@ -1,18 +1,9 @@
 // components/JobScraper.tsx
 "use client";
-import { useCallback, useEffect, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import {
-  clearSearch,
-  fetchJobs,
-  searchJobs,
-} from "../../lib/store/features/job/jobSearch";
-import { RootState, AppDispatch } from "../../lib/store/store";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import JobCard from "@/components/ui/jobCard";
 import { Label } from "@/components/ui/label";
 import {
   Popover,
@@ -28,50 +19,46 @@ import {
   MapPin,
   Search,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { lazy, Suspense, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
+import {
+  clearSearch,
+  fetchJobs,
+  searchJobs,
+} from "../../lib/store/features/job/jobSearch";
+import { AppDispatch, RootState } from "../../lib/store/store";
+
+const JobCard = lazy(() => import("@/components/ui/jobCard"));
 
 export default function JobScraper() {
   const dispatch = useDispatch<AppDispatch>();
-  const router = useRouter();
-  const observer = useRef<IntersectionObserver | null>(null);
 
   const {
     jobs,
     totalJobs,
     loading,
-    error,
     jobTitle,
     jobLocation,
     datePosted,
     currentPage,
-    isSearching,
   } = useSelector((state: RootState) => state.jobs);
 
-  
   useEffect(() => {
     // Fetch jobs if not already in store
     if (!jobs.length) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
     }
-
-
   }, [dispatch, jobs.length]);
-
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
 
     try {
-      await dispatch(
-        searchJobs({ jobTitle, jobLocation, datePosted })
-      ).unwrap();
+      await dispatch(searchJobs()).unwrap();
     } catch (error) {
-      toast({
-        title: "Search Failed",
-        description: "Unable to perform search. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Search Failed ");
+      console.log(error);
     }
   };
 
@@ -82,26 +69,9 @@ export default function JobScraper() {
 
   const handlePageChange = (pages: number) => {
     if (pages !== currentPage) {
-      dispatch(fetchJobs({page:pages,limit:10}));  // Fetch only the jobs for the new page
+      dispatch(fetchJobs({ page: pages, limit: 10 })); // Fetch only the jobs for the new page
     }
   };
-  
-  // Infinite scroll
-  const lastJobElementRef = useCallback(
-    (node) => {
-      if (loading) return;
-      if (observer.current) observer.current.disconnect();
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && currentPage < totalPages) {
-          dispatch(fetchJobs(currentPage + 1));
-        }
-      });
-      if (node) observer.current.observe(node);
-    },
-    [loading, currentPage, totalPages, dispatch]
-  );
-  
-
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -245,18 +215,11 @@ export default function JobScraper() {
               </div>
             ) : jobs.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {jobs.map((job, index) => (
-                  <JobCard
-                    key={job._id}
-                    job={job}
-                    index={index}
-                    jobs={jobs}
-                    lastJobElementRef={
-                      index === jobs.length - 1 ? lastJobElementRef : null
-                    } // Adjusted condition for last job
-                    router={router}
-                  />
-                ))}
+                <Suspense fallback={<div>Loading Jobs...</div>}>
+                  {jobs.map((job, index) => (
+                    <JobCard key={job._id} job={job} index={index} />
+                  ))}
+                </Suspense>
               </div>
             ) : (
               <div className="text-center py-12">

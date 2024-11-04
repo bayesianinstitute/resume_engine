@@ -1,31 +1,25 @@
-import React, { useState } from "react";
-import { Card, CardContent } from "./card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
-import ReactMarkdown from "react-markdown";
 import { Clock, Link, MapPin } from "lucide-react";
-import { Router, useRouter } from "next/router";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { setJobDescription } from "../../lib/store/features/job/jobSlice";
 import { useAppDispatch } from "../../lib/store/hooks";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent } from "./card";
+import { Job } from "@/types/job";
 
-interface Job {
-  title: string;
-  description: string;
-  datePosted: Date;
-  url: string;
-  location: string;
-}
+
 
 interface JobCardProps {
   job: Job;
   index: number;
-  jobs: Job[];
-  lastJobElementRef: React.RefObject<HTMLDivElement>;
-  router:Router
 }
 
-const JobCard = ({ job, index, jobs, lastJobElementRef,router }: JobCardProps) => {
+
+const JobCard = ({ job }: JobCardProps) => {
   const dispatch = useAppDispatch();
+  const router=useRouter()
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleInterviewPrepClick = () => {

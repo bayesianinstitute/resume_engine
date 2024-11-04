@@ -109,21 +109,22 @@ export const scrapJob = TryCatch(async (req, res, next) => {
 
 // get jobs
 export const searchJobs = TryCatch(async (req, res, next) => {
-  const { title, location, experienceLevel, datePosted } = req.query;
+  const { title, location,  datePosted } = req.body;
   const filter = {};
 
   if (title) filter.title = new RegExp(title, "i");
   if (location) filter.location = new RegExp(location, "i");
-  if (experienceLevel) filter.experienceLevel = experienceLevel;
 
   // Filtering by date posted
   if (datePosted) {
     const date = new Date(datePosted);
     filter.datePosted = { $gte: date }; // Filter for jobs posted on or after the given date
   }
-
   const joblists = await Joblist.find(filter);
-  return res.status(200).json(joblists);
+  const totalJoblists = joblists.length;
+  console.log(totalJoblists); //
+
+  return res.status(200).json({ joblists, totalJoblists });
 });
 
 export const listJobs = TryCatch(async (req, res, next) => {

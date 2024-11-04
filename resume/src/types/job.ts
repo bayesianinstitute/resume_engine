@@ -1,12 +1,24 @@
-export interface Job  {
+export interface AddJobForm {
     title: string;
+    company: string;
     location: string;
     datePosted: Date;
     experienceLevel: string;
-    company: string;
     description: string;
-    url: string ;
+    url: string;
   }
+
+export  interface Job {
+    _id: string;
+    title: string;
+    company: string;
+    location: string;
+    datePosted: Date;
+    experienceLevel: string;
+    description: string;
+    url: string;
+  }
+
 
 export interface AutoJob {
     autoTitle: string,

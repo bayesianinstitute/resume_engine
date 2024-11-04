@@ -15,7 +15,7 @@ const ResumeTour = () => {
     },
     {
       target: '.sidebar',
-      content: 'Here are all the Feature in the Application',
+      content: 'Here are all the Features in the Application',
       placement: 'left',
     },
     {
@@ -26,7 +26,7 @@ const ResumeTour = () => {
     },
     {
       target: ".analyze-button",
-      content: "View and Analyze your resume by clicking this .",
+      content: "View and Analyze your resume by clicking this.",
       placement: "right",
     },
     {
@@ -34,14 +34,15 @@ const ResumeTour = () => {
       content: "You can delete any resume by clicking this button.",
       placement: "left",
     },
-
   ];
 
   const handleJoyrideCallback = (data: CallBackProps) => {
-    const { status } = data as { status: STATUS };
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+    const { status } = data;
+
+    // Check status directly for each end state
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       setRunTour(false);
-      // You could save this preference to localStorage or your backend
+      // Save preference to localStorage
       if (typeof localStorage !== "undefined") {
         localStorage.setItem("resumeTourComplete", "true");
       }
@@ -49,9 +50,9 @@ const ResumeTour = () => {
   };
 
   // Don't show tour if it's already been completed
-    if (typeof localStorage !== "undefined" && localStorage.getItem('resumeTourComplete') === 'true') {
-      return null;
-    }
+  if (typeof localStorage !== "undefined" && localStorage.getItem('resumeTourComplete') === 'true') {
+    return null;
+  }
 
   return (
     <Joyride

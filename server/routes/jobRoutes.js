@@ -4,7 +4,7 @@ import { addJob, searchJobs, listJobs,scrapJob } from '../controllers/jobControl
 const router = express.Router();
 
 router.post('/add', addJob);            // Add a job
-router.get('/search', searchJobs);          // Search jobs
+router.post('/search', searchJobs);          // Search jobs
 router.get('/list', listJobs);       // List jobs (with pagination)
 router.post('/scrap/:title/:location/:hours', scrapJob);       // scrapJob jobs
 

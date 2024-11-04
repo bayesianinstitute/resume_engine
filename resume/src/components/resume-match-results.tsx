@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -9,32 +15,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Download, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { EvaluationDetails, MatchResult } from "@/types/matcher";
 import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
-  useReactTable,
   getFilteredRowModel,
   getSortedRowModel,
   SortingState,
+  useReactTable,
 } from "@tanstack/react-table";
-import { Progress } from "@/components/ui/progress";
-import { EvaluationDetails, MatchResult } from "@/types/matcher";
+import { ChevronDown, ChevronUp, Download, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
-export function ResumeMatchResults({ results }) {
+export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
   const [expandedRows, setExpandedRows] = useState<number[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -61,9 +55,7 @@ export function ResumeMatchResults({ results }) {
         header: "Match Result",
         cell: ({ row }) => {
           const isGoodFit = row.original.matchResult.includes("good fit");
-          const score = isGoodFit
-            ? parseInt(row.original.matchResult.match(/\d+/)[0])
-            : 0;
+
           return (
             <div className="flex items-center space-x-2">
               <Badge
@@ -86,7 +78,13 @@ export function ResumeMatchResults({ results }) {
         cell: ({ row }) => {
           let evaluation: EvaluationDetails;
           try {
-            evaluation = JSON.parse(row.original.evaluationResponse);
+            // Check if evaluationResponse is a string and parse it, otherwise, assign it directly.
+            evaluation =
+              typeof row.original.evaluationResponse === "string"
+                ? (JSON.parse(
+                    row.original.evaluationResponse
+                  ) as EvaluationDetails)
+                : row.original.evaluationResponse;
             console.log("evaluation : ", evaluation);
           } catch (err) {
             console.error("Error parsing JSON : ", err);
@@ -163,10 +161,10 @@ export function ResumeMatchResults({ results }) {
 
     const csvContent = table.getFilteredRowModel().rows.map((row) => {
       const result = row.original;
-      let cleanMatchResult = result.matchResult;
+      const cleanMatchResult = result.matchResult;
 
       // Safely parse evaluationResponse
-      let evaluation = {};
+      let evaluation :EvaluationDetails;
       try {
         // First, try to parse as JSON
         evaluation =
@@ -175,11 +173,25 @@ export function ResumeMatchResults({ results }) {
             : result.evaluationResponse;
       } catch (e) {
         console.error("Error parsing evaluationResponse:", e);
-        evaluation = {};
+        evaluation = {
+          scores: {
+              relevance: 0,
+              skills: 0,
+              experience: 0,
+              presentation: 0,
+          },
+          compositeScore: 0,
+          recommendation: "Error parsing evaluationResponse",
+        }as EvaluationDetails;
       }
 
       // Safely extract scores
-      const scores = evaluation.scores || {};
+      const scores = evaluation.scores || {
+        relevance: 0,
+        skills: 0,
+        experience: 0,
+        presentation: 0,
+      };
 
       // Prepare CSV row values
       const csvRow = [
@@ -322,9 +334,14 @@ export function ResumeMatchResults({ results }) {
                             {(() => {
                               let evaluation: EvaluationDetails;
                               try {
-                                evaluation = JSON.parse(
-                                  row.original.evaluationResponse
-                                );
+                                // Check if evaluationResponse is a string and parse it, otherwise, assign it directly.
+                                evaluation =
+                                  typeof row.original.evaluationResponse ===
+                                  "string"
+                                    ? (JSON.parse(
+                                        row.original.evaluationResponse
+                                      ) as EvaluationDetails)
+                                    : row.original.evaluationResponse;
                                 console.log("evaluation : ", evaluation);
                               } catch (err) {
                                 console.error("Error parsing JSON : ", err);

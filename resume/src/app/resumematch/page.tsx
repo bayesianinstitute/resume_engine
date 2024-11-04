@@ -82,12 +82,27 @@ export default function ResumeMatcher() {
     hasNextPage,
     onLoadMore: loadMoreJobs,
     rootMargin: "0px 0px 400px 0px",
-    rootRef: scrollAreaRef,
+    // rootRef: scrollAreaRef,
   });
 
   const toggleSelectAll = (checked: boolean) => {
-    setSelectedJobs(checked ? resumes.map((r) => r.resume) : []);
+    if (checked) {
+      const resumeIds = resumes.map((resume) => resume.resumeId);
+      setSelectedJobs((prevSelected) => [
+        ...prevSelected.filter((id) =>
+          filteredJobs.some((job) => job._id === id)
+        ),
+        ...resumeIds,
+      ]);
+    } else {
+      setSelectedJobs((prevSelected) =>
+        prevSelected.filter((id) =>
+          filteredJobs.some((job) => job._id === id)
+        )
+      );
+    }
   };
+  
 
   const toggleSelectAllJobs = (checked: boolean) => {
     setSelectAllJobs(checked);
@@ -170,7 +185,11 @@ export default function ResumeMatcher() {
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="selectAll"
-                    checked={selectedJobs.length === resumes.length}
+                    checked={
+                      resumes.length > 0 && resumes.every((resume) =>
+                        selectedJobs.includes(resume.resumeId)
+                      )
+                    }
                     onCheckedChange={toggleSelectAll}
                   />
                   <Label

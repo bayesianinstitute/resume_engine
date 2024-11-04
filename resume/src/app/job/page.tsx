@@ -19,11 +19,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { dateOptions, experienceOptions } from "@/constant/dropdata";
 import { useState } from "react";
 
-import { AddJobApi, AutoJob, AutoJobApi, Job } from "@/types/job";
+import { AddJobApi, AddJobForm, AutoJob, AutoJobApi } from "@/types/job";
 import { toast } from "react-toastify";
 
 export default function JobTabs() {
-  const [formData, setFormData] = useState<Job>({
+  const [formData, setFormData] = useState<AddJobForm>({
     title: "",
     location: "",
     experienceLevel: "",
@@ -32,8 +32,8 @@ export default function JobTabs() {
     url: "",
     company: "",
   });
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedExperience, setSelectedExperience] = useState("");
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedExperience, setSelectedExperience] = useState<string>("");
   const [autoJobData, setAutoJobData] = useState<AutoJob>({
     autoTitle: "",
     autoLocation: "",
@@ -214,11 +214,11 @@ export default function JobTabs() {
                         options={experienceOptions as never[]}
                         placeholder="Select Experience Level"
                         value={selectedExperience as never}
-                        onSelect={(value: string) => {
-                          setSelectedExperience(value);
+                        onSelect={(value: string | null) => {
+                          setSelectedExperience(value ?? "");
                           setFormData((prev) => ({
                             ...prev,
-                            experienceLevel: value,
+                            experienceLevel: value ?? "",
                           }));
                         }}
                       />
@@ -300,11 +300,11 @@ export default function JobTabs() {
                         options={dateOptions as never}
                         placeholder="Select date range"
                         value={selectedDate}
-                        onSelect={(value) => {
-                          setSelectedDate(value);
+                        onSelect={(value: string | null) => {
+                          setSelectedDate(value ?? "");
                           setAutoJobData((prev) => ({
                             ...prev,
-                            autoDatePosted: value,
+                            autoDatePosted: value ? parseInt(value) : 0,
                           }));
                         }}
                       />

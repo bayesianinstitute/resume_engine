@@ -1,3 +1,0 @@
-interface scrapeapi{
-    message: string
-}

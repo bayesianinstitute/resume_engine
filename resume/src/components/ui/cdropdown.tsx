@@ -18,15 +18,22 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
+interface IonicPopover {
+  value: string | null
+  options: { value: string; label: string }[]
+  placeholder: string
+  onSelect: (newValue: string | null) => void
+}
+
 export function CustomDropdown({ 
   options = [], 
   placeholder = "Select an option...", 
   value, 
   onSelect 
-}) {
+}:IonicPopover) {
   const [open, setOpen] = React.useState(false)
 
-  const handleSelect = (selectedValue) => {
+  const handleSelect = (selectedValue: string) => {
     const newValue = selectedValue === value ? "" : selectedValue
     onSelect(newValue)
     setOpen(false)

@@ -1,13 +1,11 @@
 // app/components/AuthLayout.tsx
 "use client"
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useDispatch, useSelector } from 'react-redux'
-import { AppDispatch, RootState } from '@/lib/store/store'
-import { fetchJobs } from '@/lib/store/features/job/jobSearch'
-import { fetchResumes } from '@/lib/store/features/resume/resumeSlice'
 import { setToken } from '@/lib/store/features/user/user'
+import { AppDispatch, RootState } from '@/lib/store/store'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 
 export default function AuthLayout({
   children,
