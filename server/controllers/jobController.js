@@ -111,7 +111,7 @@ export const scrapJob = TryCatch(async (req, res, next) => {
 export const searchJobs = TryCatch(async (req, res, next) => {
   const { title, location,  datePosted } = req.body;
   const filter = {};
-
+  console.log(`Title: ${title}, location: ${location} and datePosted: ${datePosted}`)
   if (title) filter.title = new RegExp(title, "i");
   if (location) filter.location = new RegExp(location, "i");
 
@@ -122,7 +122,6 @@ export const searchJobs = TryCatch(async (req, res, next) => {
   }
   const joblists = await Joblist.find(filter);
   const totalJoblists = joblists.length;
-  console.log(totalJoblists); //
 
   return res.status(200).json({ joblists, totalJoblists });
 });

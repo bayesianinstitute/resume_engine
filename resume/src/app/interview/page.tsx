@@ -21,7 +21,7 @@ import { AppDispatch, RootState } from "@/lib/store/store";
 import { preparationAPIResponse, PrepResource } from "@/types/interview";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, Download, List, MessageSquare } from "lucide-react";
-import React, { useCallback, useState, useRef } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
@@ -106,6 +106,13 @@ export default function InterviewPreparation() {
       dispatch(setLoading(false));
     }
   };
+
+  useEffect(() => {
+    // Fetch jobs if not already in store
+    if (!jobs.length) {
+      dispatch(fetchJobs({ page: 1, limit: 10 }));
+    }
+  }, [dispatch, jobs.length]);
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">

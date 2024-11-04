@@ -19,6 +19,10 @@ export  interface Job {
     url: string;
   }
 
+  // export interface SearchResult {
+  //   jobs: Job[];
+  //   totalJobs: number;
+  // }
 
 export interface AutoJob {
     autoTitle: string,

@@ -56,6 +56,7 @@ export default function JobScraper() {
 
     try {
       await dispatch(searchJobs()).unwrap();
+
     } catch (error) {
       toast.error("Search Failed ");
       console.log(error);

@@ -1,7 +1,7 @@
 // redux/jobSlice.ts
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { RootState } from "../../store";
 import { Job } from "@/types/job";
+import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { RootState } from "../../store";
 // import { format } from "date-fns";
 
 
@@ -63,7 +63,7 @@ export const searchJobs = createAsyncThunk(
     if (!response.ok) throw new Error("Failed to search jobs");
 
     const data = await response.json();
-    return { joblists: data, totalJoblists: data.length }; // Adjusted to match your API response
+    return { joblists: data.joblists, totalJoblists: data.totalJoblists }; // Adjusted to match your API response
   }
 );
 
@@ -72,6 +72,9 @@ export const clearSearch = createAsyncThunk(
   "jobs/clearSearch",
   async (_, { dispatch }) => {
     dispatch(fetchJobs({ page: 1, limit: 10 }));
+    dispatch(setJobTitle(''));
+    dispatch(setJobLocation(''));
+    dispatch(setDatePosted(new Date()));
   }
 );
 
@@ -130,8 +133,8 @@ const jobSlice = createSlice({
         state.error = action.payload as string;
       })
       .addCase(searchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
-        console.log(action.payload.joblists)
-        console.log(action.payload.totalJoblists)
+        console.log("job list",action.payload.joblists)
+        console.log("total  job number",action.payload.totalJoblists)
         state.jobs = action.payload.joblists;
         state.totalJobs = action.payload.totalJoblists;
         state.loading = false;
