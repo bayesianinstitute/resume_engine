@@ -35,11 +35,14 @@ import { Resume, ResumeApiResponse } from "@/types/resume";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 
-import ResumeTour from "@/components/ResumeTour";
+import { resumeSteps } from "@/constant/tourdata";
+import Tour from "@/components/Tour";
 
 export default function ResumeViewer() {
   const [files, setFiles] = useState<File[]>([]);
   const [open, setOpen] = useState(false);
+
+  
 
   const dispatch = useDispatch<AppDispatch>();
   const auth = useSelector((state: RootState) => state.auth);
@@ -164,7 +167,7 @@ export default function ResumeViewer() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <ResumeTour />
+      <Tour steps={resumeSteps} name="ResumeTourComplete" />
       <Sidebar />
       <div className="flex-1 ml-64 p-6">
         <h1 className="text-4xl font-extrabold text-gray-800 text-center">

@@ -68,7 +68,7 @@ const JobCard = ({ job }: JobCardProps) => {
               href={job.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+              className="ViewDetails inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
             >
               <Link className="w-4 h-4 mr-2" />
               View Details
@@ -85,9 +85,9 @@ const JobCard = ({ job }: JobCardProps) => {
 
           <button
             onClick={handleInterviewPrepClick}
-            className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+            className="Interview inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
           >
-            <Clock className="w-4 h-4 ml-2" />  Interview Prep
+            <Clock className=" w-4 h-4 ml-2" />  Interview Prep
           </button>
 
           <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>

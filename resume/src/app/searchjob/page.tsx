@@ -28,6 +28,8 @@ import {
   searchJobs,
 } from "../../lib/store/features/job/jobSearch";
 import { AppDispatch, RootState } from "../../lib/store/store";
+import { searchStep } from "@/constant/tourdata";
+import Tour from "@/components/Tour";
 
 const JobCard = lazy(() => import("@/components/ui/jobCard"));
 
@@ -76,6 +78,8 @@ export default function JobScraper() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      <Tour steps={searchStep} name="JobSearchTourComplete" />
+
       <Sidebar />
       <div className="flex-1 ml-64">
         <div className="p-8">
@@ -89,10 +93,10 @@ export default function JobScraper() {
               </p>
             </div>
 
-            <Card className="shadow-lg border-0 rounded-xl bg-white/50 backdrop-blur-sm">
+            <Card className=" shadow-lg border-0 rounded-xl bg-white/50 backdrop-blur-sm">
               <CardContent className="p-6">
                 <form onSubmit={handleSearch} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="searchinput grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold text-gray-700">
                         Job Title
@@ -215,7 +219,7 @@ export default function JobScraper() {
                 ))}
               </div>
             ) : jobs.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="joblist grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Suspense fallback={<div>Loading Jobs...</div>}>
                   {jobs.map((job, index) => (
                     <JobCard key={job._id} job={job} index={index} />

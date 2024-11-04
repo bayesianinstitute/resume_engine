@@ -3,38 +3,15 @@
 import { useState } from "react";
 import Joyride, { CallBackProps, STATUS, Step } from "react-joyride";
 
-const ResumeTour = () => {
+interface TourProp{
+  steps: Step[];
+  name: string;
+}
+
+const Tour = ({steps,name}:TourProp ) => {
   const [runTour, setRunTour] = useState(true);
 
-  const steps: Step[] = [
-    {
-      target: "body",
-      content: "Welcome to Resume Manager! Let us show you around.",
-      placement: "center",
-      disableBeacon: true,
-    },
-    {
-      target: '.sidebar',
-      content: 'Here are all the Features in the Application',
-      placement: 'left',
-    },
-    {
-      target: ".upload-section",
-      content:
-        "Upload new resumes by dragging and dropping files here or clicking to browse.",
-      placement: "left",
-    },
-    {
-      target: ".analyze-button",
-      content: "View and Analyze your resume by clicking this.",
-      placement: "right",
-    },
-    {
-      target: ".delete-button",
-      content: "You can delete any resume by clicking this button.",
-      placement: "left",
-    },
-  ];
+  
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;
@@ -44,13 +21,13 @@ const ResumeTour = () => {
       setRunTour(false);
       // Save preference to localStorage
       if (typeof localStorage !== "undefined") {
-        localStorage.setItem("resumeTourComplete", "true");
+        localStorage.setItem(name, "true");
       }
     }
   };
 
   // Don't show tour if it's already been completed
-  if (typeof localStorage !== "undefined" && localStorage.getItem('resumeTourComplete') === 'true') {
+  if (typeof localStorage !== "undefined" && localStorage.getItem(name) === 'true') {
     return null;
   }
 
@@ -79,4 +56,4 @@ const ResumeTour = () => {
   );
 };
 
-export default ResumeTour;
+export default Tour;
