@@ -1,4 +1,5 @@
 git pull
-npm run build
+npm i
+sudo npm run build
 sudo pm2 restart all
 
