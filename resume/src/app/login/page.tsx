@@ -10,12 +10,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { useDispatch } from 'react-redux'
+import { AppDispatch } from '@/lib/store/store'
+import { setToken } from '@/lib/store/features/user/user'
+import { loginResponse } from '@/types/user'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const dispatch = useDispatch<AppDispatch>();
+
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,15 +39,15 @@ export default function LoginPage() {
           password,
         }),
       })
+      const data:loginResponse = await response.json()
 
-      const data = await response.json()
-
-      if (!response.ok) {
+      if (!data.success) {
         toast.error(data.message || 'Failed to login. Please try again.')
       } else {
         // Store the token in localStorage
+        dispatch(setToken(data.data.token))
         localStorage.setItem('token', data.data.token) // Save token
-        toast.success("Login successful!")
+        toast.success(data.message)
         
         // Redirect to the resume page or dashboard
         router.push('/uploadResume') 

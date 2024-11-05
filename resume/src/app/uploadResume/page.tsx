@@ -54,6 +54,9 @@ export default function ResumeViewer() {
   useEffect(() => {
     if (auth.userId && auth.token) {
       dispatch(fetchResumes(auth.userId));
+    } else {
+
+      console.error("Token is missing");
     }
   }, [auth.userId, auth.token, dispatch]);
 
@@ -93,7 +96,6 @@ export default function ResumeViewer() {
     try {
       dispatch(setLoading(true));
       // dispatch(setErrorMessage(null));
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/resume/stats`,
         {

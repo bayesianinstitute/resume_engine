@@ -21,6 +21,7 @@ const authSlice = createSlice({
       try {
         const decodedToken = jwtDecode<{ userId: string }>(action.payload);
         state.userId = decodedToken.userId || null;
+        console.log(state.userId);
       } catch (error) {
         console.error("Error decoding token:", error);
         state.userId = null;

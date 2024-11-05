@@ -10,7 +10,7 @@ const router = express.Router();
 const upload = multer();
 
 router.post('/matcher', matcher);
-router.post('/stats', upload.single('resume'), stats);
+router.post('/stats',verifyTokenMiddleware, upload.single('resume'), stats);
 router.get('/getAllResumes', getAllResumes);
 router.get('/view/:userId/:fileName', resumeview);
 router.delete('/', deleteResume);
