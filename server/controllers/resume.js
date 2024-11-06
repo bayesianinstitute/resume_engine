@@ -20,73 +20,78 @@ const __dirname = path.dirname(__filename);
 
 async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   const prompt = `
-    Evaluate the following resume against the job description. For each criterion, provide a score out of 100:
-    - Relevance to the job role
-    - Skills and expertise
-    - Experience level
-    - Presentation and clarity
+  Evaluate the resume text below against the provided job description. 
+  Be more lenient in your scoring, focusing on potential fit and transferable skills. Respond strictly in this JSON format:
+  {
+    "scores": {
+      "relevance": <score>,
+      "skills": <score>,
+      "experience": <score>,
+      "presentation": <score>
+    },
+    "compositeScore": <score>,
+    "recommendation": "<suggestion>"
+  }
 
-    Also, calculate a composite score. If the composite score is below ${fitThreshold}, include a recommendation for improvement.
+  Scoring Guidance:
+  - If the resume matches at least 50% of the job requirements, the 'relevance' score should be no less than 60.
+  - For 'skills', give a higher score if even partial alignment with technical or soft skills is detected (start at 70).
+  - 'Experience' should weigh even indirect roles positively if related industries or projects are present.
+  - Presentation should default to 80 unless major issues exist.
+  - The composite score should average these, but rarely fall below 60 if there’s some alignment.
 
-    Respond strictly in the following JSON format without any additional text:
-    {
-      "scores": {
-        "relevance": <score>,
-        "skills": <score>,
-        "experience": <score>,
-        "presentation": <score>
-      },
-      "compositeScore": <score>,
-      "recommendation": "<one concise suggestion if applicable>"
+  Resume: ${resumeText}
+  Job Description: ${jobDescription}
+`;
+
+
+  // Helper function to extract and validate JSON from AI response
+  const extractValidJSON = (text) => {
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/); // Match the JSON part
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]); // Parse the JSON content
+      }
+    } catch (error) {
+      console.error("JSON parsing error:", error.message);
     }
-
-    Make sure not to include any other text or formatting, only the JSON object.
-
-    Resume:
-    ${resumeText}
-
-    Job Description:
-    ${jobDescription}
-  `;
+    return null; // Return null if no valid JSON is found
+  };
 
   try {
     const chatSession = genAIModel.startChat({ history: [] });
-    const result = await chatSession.sendMessage(prompt);
-    let response = result.response.text().trim();
 
-    // Function to check if the response is valid JSON
-    const isValidJSON = (text) => {
-      try {
-        JSON.parse(text);
-        return true;
-      } catch {
-        console.log("it is not a valid JSON");
-        return false;
-      }
-    };
+    // Initial attempt to get a valid JSON response
+    let result = await chatSession.sendMessage(prompt);
+    let responseText = result.response.text().trim();
+    let parsedResponse = extractValidJSON(responseText);
 
-    // If response is not valid JSON, resend the request
-    if (!isValidJSON(response)) {
-      console.warn("Response was not in JSON format. Resending request.");
-      response = await chatSession.sendMessage(
-        prompt + "\n\nPlease ensure your response is in valid JSON format."
+    // Retry logic if the first attempt fails to return valid JSON
+    if (!parsedResponse) {
+      console.warn("Initial response was not valid JSON. Retrying...");
+      result = await chatSession.sendMessage(
+        prompt + "\n\nEnsure your response is in strict JSON format as specified."
       );
-      response = response.response.text().trim();
+      responseText = result.response.text().trim();
+      parsedResponse = extractValidJSON(responseText);
     }
 
-    // Parse the validated JSON response
-    const jsonResponse = JSON.parse(response);
+    if (!parsedResponse) {
+      throw new Error("Failed to parse valid JSON after multiple attempts.");
+    }
 
     return {
-      evaluationText: response,
-      scores: jsonResponse.scores,
-      compositeScore: jsonResponse.compositeScore,
-      recommendation: jsonResponse.recommendation,
+      evaluationText: JSON.stringify(parsedResponse, null, 2), // Pretty print JSON for debugging
+      scores: parsedResponse.scores,
+      compositeScore: parsedResponse.compositeScore,
+      recommendation: parsedResponse.recommendation,
     };
+
   } catch (error) {
-    console.error("Error fetching LLM evaluation:", error);
+    console.error("Error during evaluation:", error.message);
+
     return {
-      evaluationText: "Evaluation results not found.",
+      evaluationText: "Evaluation failed.",
       scores: {
         relevance: 0,
         skills: 0,
@@ -94,10 +99,11 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
         presentation: 0,
       },
       compositeScore: 0,
-      recommendation: null,
+      recommendation: "Error encountered during evaluation. Please review.",
     };
   }
 }
+
 
 export const matcher = TryCatch(async (req, res, next) => {
   const {
