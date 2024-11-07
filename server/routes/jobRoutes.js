@@ -6,6 +6,6 @@ const router = express.Router();
 router.post('/add', addJob);            // Add a job
 router.post('/search', searchJobs);          // Search jobs
 router.get('/list', listJobs);       // List jobs (with pagination)
-router.post('/scrap/:title/:location/:hours', scrapJob);       // scrapJob jobs
+router.post('/scrap', scrapJob);       // scrapJob jobs
 
 export default router;

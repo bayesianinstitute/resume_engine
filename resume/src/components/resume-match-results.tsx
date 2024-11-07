@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { preprocessCleanedEvaluationResponse, safeParseJson } from "@/lib/matcherparse";
 import { EvaluationDetails, MatchResult } from "@/types/matcher";
 import {
   ColumnDef,
@@ -28,10 +29,12 @@ import {
 import { ChevronDown, ChevronUp, Download, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
+
 export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
   const [expandedRows, setExpandedRows] = useState<number[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  console.log("results", results);
 
   const columns: ColumnDef<MatchResult>[] = useMemo(
     () => [
@@ -54,7 +57,20 @@ export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
         accessorKey: "matchResult",
         header: "Match Result",
         cell: ({ row }) => {
-          const isGoodFit = row.original.matchResult.includes("good fit");
+          const result = row.original;
+
+
+          // Clean the string by removing the backticks before parsing it
+
+          const cleanedEvaluationResponse = preprocessCleanedEvaluationResponse(
+            result.evaluationResponse
+          );
+
+          // Now safely parse the cleaned JSON string
+          const evaluation = safeParseJson(cleanedEvaluationResponse);
+          console.log("evaluation : ", evaluation);
+
+          const isGoodFit = evaluation.isfit;
 
           return (
             <div className="flex items-center space-x-2">
@@ -76,31 +92,18 @@ export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
         accessorKey: "evaluationResponse",
         header: "Score(%)",
         cell: ({ row }) => {
-          let evaluation: EvaluationDetails;
-          try {
-            // Check if evaluationResponse is a string and parse it, otherwise, assign it directly.
-            evaluation =
-              typeof row.original.evaluationResponse === "string"
-                ? (JSON.parse(
-                    row.original.evaluationResponse
-                  ) as EvaluationDetails)
-                : row.original.evaluationResponse;
-            console.log("evaluation : ", evaluation);
-          } catch (err) {
-            console.error("Error parsing JSON : ", err);
-            evaluation = {
-              scores: {
-                relevance: 0,
-                skills: 0,
-                experience: 0,
-                presentation: 0,
-              },
-              compositeScore: 0,
-              recommendation: "Something went wrong with the recommendation",
-            };
-          }
+          const result = row.original;
 
+          // Clean the string by removing the backticks before parsing it
+
+          const cleanedEvaluationResponse = preprocessCleanedEvaluationResponse(
+            result.evaluationResponse
+          );
+
+          // Now safely parse the cleaned JSON string
+          const evaluation:EvaluationDetails = safeParseJson(cleanedEvaluationResponse);
           console.log("evaluation : ", evaluation);
+
           const compositeScore = evaluation.compositeScore || 0;
           return (
             <div className="flex items-center space-x-2">
@@ -150,6 +153,7 @@ export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
       "Resume Name",
       "Job Title",
       "Company Name",
+      "Isfit",
       "Match Result",
       "compositeScore",
       "Relevance",
@@ -164,26 +168,15 @@ export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
       const cleanMatchResult = result.matchResult;
 
       // Safely parse evaluationResponse
-      let evaluation :EvaluationDetails;
-      try {
-        // First, try to parse as JSON
-        evaluation =
-          typeof result.evaluationResponse === "string"
-            ? JSON.parse(result.evaluationResponse)
-            : result.evaluationResponse;
-      } catch (e) {
-        console.error("Error parsing evaluationResponse:", e);
-        evaluation = {
-          scores: {
-              relevance: 0,
-              skills: 0,
-              experience: 0,
-              presentation: 0,
-          },
-          compositeScore: 0,
-          recommendation: "Error parsing evaluationResponse",
-        }as EvaluationDetails;
-      }
+
+        // Clean the string by removing the backticks before parsing it
+
+        const cleanedEvaluationResponse = preprocessCleanedEvaluationResponse(
+          result.evaluationResponse
+        );
+
+        const evaluation:EvaluationDetails = safeParseJson(cleanedEvaluationResponse);
+
 
       // Safely extract scores
       const scores = evaluation.scores || {
@@ -198,6 +191,7 @@ export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
         result.resumeName || "",
         result.jobTitle || "",
         result.jobCompany || "",
+        evaluation.isfit || false,
         cleanMatchResult ? cleanMatchResult.replace(/,/g, ";") : "", // Replace commas to avoid CSV parsing issues
         evaluation.compositeScore || "",
         scores.relevance || "",
@@ -332,31 +326,20 @@ export function ResumeMatchResults({ results }: { results: MatchResult[] }) {
                               Evaluation Details
                             </h4>
                             {(() => {
-                              let evaluation: EvaluationDetails;
-                              try {
-                                // Check if evaluationResponse is a string and parse it, otherwise, assign it directly.
-                                evaluation =
-                                  typeof row.original.evaluationResponse ===
-                                  "string"
-                                    ? (JSON.parse(
-                                        row.original.evaluationResponse
-                                      ) as EvaluationDetails)
-                                    : row.original.evaluationResponse;
+
+                              const result = row.original;
+                              
+
+                                const cleanedEvaluationResponse =
+                                  preprocessCleanedEvaluationResponse(
+                                    result.evaluationResponse
+                                  );
+
+                                const evaluation:EvaluationDetails = safeParseJson(
+                                  cleanedEvaluationResponse
+                                );
                                 console.log("evaluation : ", evaluation);
-                              } catch (err) {
-                                console.error("Error parsing JSON : ", err);
-                                evaluation = {
-                                  scores: {
-                                    relevance: 0,
-                                    skills: 0,
-                                    experience: 0,
-                                    presentation: 0,
-                                  },
-                                  compositeScore: 0,
-                                  recommendation:
-                                    "Something went wrong with the recommendation",
-                                };
-                              }
+                              
 
                               return (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

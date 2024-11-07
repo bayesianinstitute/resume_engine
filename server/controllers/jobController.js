@@ -1,6 +1,6 @@
 import { Joblist } from "../models/jobModel.js";
 import { TryCatch } from "../middleware/error.js";
-import ErrorHandler from "../utils/utitlity.js";
+import ErrorHandler, { fetchCountryByCity } from "../utils/utitlity.js";
 import axios from 'axios';
 
 const FASTAPI_URL = process.env.FASTAPI_URL || "http://127.0.0.1:8000/jobs/"; 
@@ -53,8 +53,9 @@ export const addJob = TryCatch(async (req, res, next) => {
 });
 
 export const scrapJob = TryCatch(async (req, res, next) => {
-  const { title, location, hours, include_description = true } = req.params;
-  console.log(title, location, hours, include_description);
+  const { title, location, hours, include_description = true, max_result_wanted } = req.body;
+  console.log(title, location, hours, include_description, max_result_wanted);
+
   // Check for required parameters
   if (!title || !location || !hours) {
     return next(
@@ -62,6 +63,7 @@ export const scrapJob = TryCatch(async (req, res, next) => {
     );
   }
 
+  const country = await fetchCountryByCity(location);
 
   try {
     // Call the FastAPI job scraping endpoint
@@ -71,37 +73,49 @@ export const scrapJob = TryCatch(async (req, res, next) => {
         location,
         hours,
         include_description,
+        country,
+        max_result_wanted
       },
     });
 
     const { total_jobs, jobs } = response.data;
-    // console.log(total_jobs);
+
     // Save each job in the database if it doesn't already exist
+    let newJobsCount = 0;
+    let newJobs = [];
     for (const job of jobs) {
       const existingJob = await Joblist.findOne({
         title: job.title,
         location: job.location,
       });
+
       if (!existingJob) {
         const joblist = new Joblist({
           title: job.title,
           location: job.location,
-          experienceLevel: job.job_level || null, // Adapt as necessary
-          datePosted: new Date(job.date_posted), // Convert string to Date
+          experienceLevel: job.job_level || null,
+          datePosted: new Date(job.date_posted),
           description: job.description || null,
           url: job.job_url,
           company: job.company,
         });
 
         await joblist.save();
+        newJobsCount++;
+        newJobs.push(joblist);
       }
     }
 
+    const existingJobsCount = total_jobs - newJobsCount;
+
     return res
       .status(201)
-      .json({ message: `Total ${total_jobs} Jobs scraped and saved successfully.`,success: true });
+      .json({ 
+        message: `Total jobs found: ${total_jobs}. New jobs saved: ${newJobsCount}. Jobs already in database: ${existingJobsCount}.`,
+        success: true,
+        newJobs
+      });
   } catch (error) {
-    // console.error("Error scraping jobs:", error);
     return next(new ErrorHandler("Error while scraping jobs", 500));
   }
 });
@@ -109,22 +123,60 @@ export const scrapJob = TryCatch(async (req, res, next) => {
 
 // get jobs
 export const searchJobs = TryCatch(async (req, res, next) => {
-  const { title, location,  datePosted } = req.body;
+  const { title, location, datePosted } = req.body;
   const filter = {};
-  console.log(`Title: ${title}, location: ${location} and datePosted: ${datePosted}`)
+
+  console.log(`Title: ${title}, Location: ${location}, Date Posted: ${datePosted}`);
+
+  // Title filter
   if (title) filter.title = new RegExp(title, "i");
+
+  // Location filter
   if (location) filter.location = new RegExp(location, "i");
 
-  // Filtering by date posted
+  // Date filter
   if (datePosted) {
     const date = new Date(datePosted);
-    filter.datePosted = { $gte: date }; // Filter for jobs posted on or after the given date
+    if (!isNaN(date.getTime())) {
+      filter.datePosted = { $gte: date }; // Filter for jobs posted on or after the given date
+    } else {
+      console.warn("Invalid date format for datePosted:", datePosted);
+    }
   }
-  const joblists = await Joblist.find(filter);
-  const totalJoblists = joblists.length;
 
-  return res.status(200).json({ joblists, totalJoblists });
+  console.log("Applied Filter:", filter);
+
+  try {
+    const joblists = await Joblist.find(filter);
+    const totalJoblists = joblists.length;
+
+    if (totalJoblists === 0) {
+      console.log("No matching job listings found");
+      return res.status(404).json({
+        message: "No job listings match the specified criteria.",
+        success: true,
+        data: {
+        joblists: [],
+        totalJoblists: 0,
+      }});
+    }
+
+    console.log("Total Job Listings Found:", totalJoblists);
+    return res.status(200).json({
+
+      message: `Found ${totalJoblists} matching job listings.`,
+      success: true,
+      data: {
+        joblists,
+        totalJoblists,
+      },
+    });
+  } catch (error) {
+    console.error("Error searching for jobs:", error);
+    return next(new ErrorHandler("Error while searching for jobs", 500));
+  }
 });
+
 
 export const listJobs = TryCatch(async (req, res, next) => {
   const { page = 1, limit = 10 } = req.query;

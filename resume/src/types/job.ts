@@ -24,10 +24,18 @@ export  interface Job {
   //   totalJobs: number;
   // }
 
+export  interface Feature {
+    properties: {
+      city: string;
+      country:string;
+      country_code:string;
+    };
+  }
 export interface AutoJob {
-    autoTitle: string,
-    autoLocation: string,
-    autoDatePosted: number,
+    title: string,
+    location: string,
+    datePosted: number,
+    max_result_wanted: number,
 }
 
 // API
@@ -41,4 +49,13 @@ export interface AddJobApi{
 export interface AutoJobApi{
     message: string;
     success: boolean;    
+}
+
+export interface searchJobApi{
+  message: string;
+  success: boolean;
+  data: {
+    joblists: Job[];
+    totalJoblists: number;
+  };
 }

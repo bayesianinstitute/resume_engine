@@ -7,6 +7,7 @@ export interface EvaluationDetails {
     };
     compositeScore: number;
     recommendation: string | null;
+    isfit: boolean
 }
 
 export interface MatchResult {
@@ -16,7 +17,7 @@ export interface MatchResult {
   jobCompany:string;
   jobId: string;
   matchResult: string;
-  evaluationResponse: EvaluationDetails;
+  evaluationResponse: string ;
 }
 
 export interface MatchResultResponse {

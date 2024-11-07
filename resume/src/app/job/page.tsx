@@ -17,10 +17,12 @@ import Sidebar from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { dateOptions, experienceOptions } from "@/constant/dropdata";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { AddJobApi, AddJobForm, AutoJob, AutoJobApi } from "@/types/job";
+import { AddJobApi, AddJobForm, AutoJob, AutoJobApi, Feature } from "@/types/job";
 import { toast } from "react-toastify";
+
+import { Loader2 } from "lucide-react";
 
 export default function JobTabs() {
   const [formData, setFormData] = useState<AddJobForm>({
@@ -35,13 +37,68 @@ export default function JobTabs() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedExperience, setSelectedExperience] = useState<string>("");
   const [autoJobData, setAutoJobData] = useState<AutoJob>({
-    autoTitle: "",
-    autoLocation: "",
-    autoDatePosted: 24,
+    title: "",
+    location: "",
+    datePosted: 24,
+    max_result_wanted: 20,
   });
 
+  const [isLocationLoading, setIsLocationLoading] = useState(true);
 
-  // useAuth()
+  const [suggestions, setSuggestions] = useState([]);
+
+  const handleLocationChange = async (e:React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData((prev) => ({ ...prev, location: value }));
+    setAutoJobData((prev) => ({ ...prev, location: value }));
+
+    if (value.length > 2) {
+      try {
+        const response = await fetch(
+          `https://api.geoapify.com/v1/geocode/autocomplete?text=${value}&apiKey=${process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY}`
+        );
+        const data = await response.json();
+        setSuggestions(data.features.map((feature:Feature) => feature.properties.city));
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
+      }
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion:string) => {
+    setFormData((prev) => ({ ...prev, location: suggestion }));
+    setAutoJobData((prev) => ({ ...prev, location: suggestion }));
+    setSuggestions([]); // Clear suggestions after selection
+  };
+
+  useEffect(() => {
+    fetchUserLocation();
+  }, []);
+
+  const fetchUserLocation = async () => {
+    try {
+      const response = await fetch(
+        `https://api.geoapify.com/v1/ipinfo?apiKey=${process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY}`
+      );
+      const data = await response.json();
+      setFormData((prev) => ({
+        ...prev,
+        city: data.city.name,
+      }));
+      setAutoJobData((prev) => ({
+        ...prev,
+        city: data.city.name,
+        country: data.country.name,
+      }));
+      console.log(data.city.name, data.country.name);
+    } catch (error) {
+      console.error("Error fetching location:", error);
+    } finally {
+      setIsLocationLoading(false);
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -54,13 +111,6 @@ export default function JobTabs() {
     }
   };
 
-  const handleAutoChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { id, value } = e.target;
-    setAutoJobData((prev) => ({ ...prev, [id]: value }));
-  };
-
   const addJob = async () => {
     const {
       title,
@@ -71,17 +121,20 @@ export default function JobTabs() {
       url,
       company,
     } = formData;
+    const requiredFields = [
+      { field: title, name: "job title" },
+      { field: location, name: "location" },
+      { field: experienceLevel, name: "experience level" },
+      { field: description, name: "job description" },
+      { field: company, name: "company name" },
+      { field: datePosted, name: "date posted" },
+    ];
 
-    if (
-      !title ||
-      !location ||
-      !experienceLevel ||
-      !description ||
-      !company ||
-      !datePosted
-    ) {
-      toast.warning("Please provide all required parameters");
-      return;
+    for (const { field, name } of requiredFields) {
+      if (!field) {
+        toast.warning(`Please provide the ${name}`);
+        return;
+      }
     }
 
     const response = await fetch(
@@ -95,16 +148,16 @@ export default function JobTabs() {
           title,
           location,
           experienceLevel,
-          datePosted: datePosted.toISOString().split('T')[0],
+          datePosted: datePosted.toISOString().split("T")[0],
           description,
           url,
           company,
         }),
       }
     );
-    const responseData:AddJobApi = await response.json();
+    const responseData: AddJobApi = await response.json();
     if (responseData.success) {
-      toast.success(responseData.message)
+      toast.success(responseData.message);
       setFormData({
         title: "",
         location: "",
@@ -116,37 +169,40 @@ export default function JobTabs() {
       });
       setSelectedDate("");
       setSelectedExperience("");
-
-    }else{
-      toast.error(responseData.message)
+    } else {
+      toast.error(responseData.message);
     }
   };
 
   const autofetchJobs = async () => {
-    const { autoTitle, autoLocation,  autoDatePosted } =
-      autoJobData;
-
-    if (!autoTitle || !autoLocation || !autoDatePosted) {
+    const { title, location, datePosted, max_result_wanted } = autoJobData;
+    if (!title || !location || !datePosted) {
       toast.warning(
         "Please provide all required parameters for auto job scraping"
       );
       return;
     }
+    toast("Requesting auto job");
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/job/scrap/${autoTitle}/${autoLocation}/${autoDatePosted}`,
+        `${process.env.NEXT_PUBLIC_BASE_URL}/job/scrap`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json", // Ensure the body is sent as JSON
+          },
+          body: JSON.stringify({
+            title,
+            location,
+            hours: datePosted,
+            max_result_wanted,
+          }),
         }
       );
-    const responseData:AutoJobApi = await response.json();
-
-
+      const responseData: AutoJobApi = await response.json();
       if (responseData.success) {
         toast.success(responseData.message);
-
-        // Here you could add code to save the jobs to your database if needed.
       } else {
         toast.error(responseData.message);
       }
@@ -196,14 +252,36 @@ export default function JobTabs() {
                         onChange={handleChange}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                       <Label htmlFor="location">Location</Label>
                       <Input
                         id="location"
-                        placeholder="Enter job location"
                         value={formData.location}
-                        onChange={handleChange}
+                        onChange={handleLocationChange}
+                        placeholder="Detecting your location..."
+                        required
+                        disabled={isLocationLoading}
                       />
+                      {isLocationLoading && (
+                        <Loader2
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 animate-spin"
+                          size={20}
+                        />
+                      )}
+                      {/* City suggestions dropdown */}
+                      {suggestions.length > 0 && (
+                        <div className="absolute bg-white border border-gray-300 rounded-md w-full mt-1 max-h-40 overflow-y-auto">
+                          {suggestions.map((suggestion, index) => (
+                            <div
+                              key={index}
+                              onClick={() => handleSuggestionClick(suggestion)}
+                              className="px-4 py-2 hover:bg-gray-200 cursor-pointer"
+                            >
+                              {suggestion}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="auto-experienceLevel">
@@ -228,7 +306,7 @@ export default function JobTabs() {
                       <Input
                         id="datePosted"
                         type="date"
-                        value={formData.datePosted.toISOString().split('T')[0]}
+                        value={formData.datePosted.toISOString().split("T")[0]}
                         onChange={handleChange}
                       />
                     </div>
@@ -280,19 +358,65 @@ export default function JobTabs() {
                       <Input
                         id="autoTitle"
                         placeholder="Enter job title"
-                        value={autoJobData.autoTitle}
-                        onChange={handleAutoChange}
+                        value={autoJobData.title}
+                        onChange={(e) =>
+                          setAutoJobData((prev) => ({
+                            ...prev,
+                            title: e.target.value,
+                          }))
+                        }
                       />
+                    </div>
+                    <div className="space-y-2 relative">
+                      <Label htmlFor="location">Location</Label>
+                      <Input
+                        id="location"
+                        value={autoJobData.location}
+                        onChange={handleLocationChange}
+                        placeholder="Detecting your location..."
+                        required
+                        disabled={isLocationLoading}
+                      />
+                      {isLocationLoading && (
+                        <Loader2
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 animate-spin"
+                          size={20}
+                        />
+                      )}
+                      {/* City suggestions dropdown */}
+                      {suggestions.length > 0 && (
+                        <div className="absolute bg-white border border-gray-300 rounded-md w-full mt-1 max-h-40 overflow-y-auto">
+                          {suggestions.map((suggestion, index) => (
+                            <div
+                              key={index}
+                              onClick={() => handleSuggestionClick(suggestion)}
+                              className="px-4 py-2 hover:bg-gray-200 cursor-pointer"
+                            >
+                              {suggestion}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="auto-location">Location</Label>
+                      <Label htmlFor="maxResultWanted">
+                        Maximum Jobs to Scrape
+                      </Label>
                       <Input
-                        id="autoLocation"
-                        placeholder="Enter job location"
-                        value={autoJobData.autoLocation}
-                        onChange={handleAutoChange}
+                        id="maxResultWanted"
+                        type="number"
+                        min="1"
+                        placeholder="Enter maximum jobs to scrape"
+                        value={autoJobData.max_result_wanted}
+                        onChange={(e) =>
+                          setAutoJobData((prev) => ({
+                            ...prev,
+                            max_result_wanted: parseInt(e.target.value),
+                          }))
+                        }
                       />
                     </div>
+
                     <div className="space-y-2">
                       <label htmlFor="datePosted">Date Posted</label>
                       <br />
@@ -309,6 +433,7 @@ export default function JobTabs() {
                         }}
                       />
                     </div>
+                    <></>
                   </CardContent>
                   <CardFooter>
                     <Button onClick={autofetchJobs}>Auto Add Jobs</Button>

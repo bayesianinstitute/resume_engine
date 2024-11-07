@@ -25,14 +25,14 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import { AppDispatch, RootState } from "../../lib/store/store";
 
-import { useRouter } from 'next/navigation';
-
+import { useRouter } from "next/navigation";
 
 export default function ResumeMatcher() {
   const dispatch = useDispatch<AppDispatch>();
   const [timeFilter, setTimeFilter] = useState("week");
+  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
-  const [selectAllJobs, setSelectAllJobs] = useState(false);
+  // const [selectAllJobs, setSelectAllJobs] = useState(false);
   const [results, setResults] = useState<MatchResult[]>([]); // State to store matching results
   const { resumes } = useSelector((state: RootState) => state.resume);
   const { jobs, loading, totalJobs } = useSelector(
@@ -85,52 +85,74 @@ export default function ResumeMatcher() {
     // rootRef: scrollAreaRef,
   });
 
-  const toggleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const resumeIds = resumes.map((resume) => resume.resumeId);
-      setSelectedJobs((prevSelected) => [
-        ...prevSelected.filter((id) =>
-          filteredJobs.some((job) => job._id === id)
-        ),
-        ...resumeIds,
-      ]);
-    } else {
-      setSelectedJobs((prevSelected) =>
-        prevSelected.filter((id) =>
-          filteredJobs.some((job) => job._id === id)
-        )
-      );
-    }
-  };
-  
+  // const toggleSelectAll = (checked: boolean) => {
+  //   if (checked) {
+  //     const resumeIds = resumes.map((resume) => resume.resumeId);
+  //     setSelectedJobs((prevSelected) => [
+  //       ...prevSelected.filter((id) =>
+  //         filteredJobs.some((job) => job._id === id)
+  //       ),
+  //       ...resumeIds,
+  //     ]);
+  //   } else {
+  //     setSelectedJobs((prevSelected) =>
+  //       prevSelected.filter((id) => filteredJobs.some((job) => job._id === id))
+  //     );
+  //   }
+  // };
 
-  const toggleSelectAllJobs = (checked: boolean) => {
-    setSelectAllJobs(checked);
-    setSelectedJobs(checked ? filteredJobs.map((job) => job._id) : []);
-  };
+  // const toggleSelectAllJobs = (checked: boolean) => {
+  //   setSelectAllJobs(checked);
+  //   setSelectedJobs(checked ? filteredJobs.map((job) => job._id) : []);
+  // };
 
   const toggleResume = (id: string) => {
-    setSelectedJobs((prev) =>
-      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
-    );
+    setSelectedResumes((prev) => {
+      // If the resume is already selected, deselect it
+      if (prev.includes(id)) {
+        return prev.filter((r) => r !== id);
+      }
+      // If fewer than 2 resumes are selected, allow selecting this resume
+      else if (prev.length < 2) {
+        return [...prev, id];
+      }
+      // Prevent adding more than 2 resumes
+      else {
+        toast.warning("You can only select up to 2 resumes.");
+        return prev;
+      }
+    });
   };
 
   const toggleJob = (jobId: string) => {
-    setSelectedJobs((prev) =>
-      prev.includes(jobId)
-        ? prev.filter((id) => id !== jobId)
-        : [...prev, jobId]
-    );
+    setSelectedJobs((prev) => {
+      // If the job is already selected, deselect it
+      if (prev.includes(jobId)) {
+        return prev.filter((id) => id !== jobId);
+      }
+      // If fewer than 2 jobs are selected, allow selecting this job
+      else if (prev.length < 2) {
+        return [...prev, jobId];
+      }
+      // Prevent adding more than 2 jobs
+      else {
+        toast.warning("You can only select up to 2 jobs.");
+        return prev;
+      }
+    });
   };
 
   const handleMatch = async () => {
     console.log(selectedJobs);
-    const resumeEntryIds = selectedJobs.filter((jobId) =>
-      resumes.some((resume) => resume.resumeId === jobId)
-    );
-    const jobIds = selectedJobs.filter((jobId) =>
-      filteredJobs.some((job) => job._id === jobId)
-    );
+    // const resumeEntryIds = selectedJobs.filter((jobId) =>
+    //   resumes.some((resume) => resume.resumeId === jobId)
+    // );
+    // const jobIds = selectedJobs.filter((jobId) =>
+    //   filteredJobs.some((job) => job._id === jobId)
+    // );
+
+    const resumeEntryIds = selectedResumes; // Use selectedResumes for resumes
+    const jobIds = selectedJobs; // Use selectedJobs for jobs
 
     toast(`Sent Job Matcher Request`);
 
@@ -183,7 +205,7 @@ export default function ResumeMatcher() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  <Checkbox
+                  {/* <Checkbox
                     id="selectAll"
                     checked={
                       resumes.length > 0 && resumes.every((resume) =>
@@ -191,18 +213,21 @@ export default function ResumeMatcher() {
                       )
                     }
                     onCheckedChange={toggleSelectAll}
-                  />
+                  /> */}
                   <Label
                     htmlFor="selectAll"
                     className="text-sm font-medium leading-none"
                   >
-                    Select ALL Resumes
+                    Select Resumes
                   </Label>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 ml-4">
                   {resumes.length === 0 ? (
                     <div>
-                      <span className="text-red-500 mb-10">No Resume Found. Please upload your resume before proceeding.</span>
+                      <span className="text-red-500 mb-10">
+                        No Resume Found. Please upload your resume before
+                        proceeding.
+                      </span>
                       <Button
                         onClick={async () => await router.push("/uploadResume")}
                         variant="outline"
@@ -217,9 +242,14 @@ export default function ResumeMatcher() {
                         key={resume.resumeId}
                         className="flex items-center space-x-2"
                       >
-                        <Checkbox
+                        {/* <Checkbox
                           id={resume.resumeId}
                           checked={selectedJobs.includes(resume.resumeId)}
+                          onCheckedChange={() => toggleResume(resume.resumeId)}
+                        /> */}
+                        <Checkbox
+                          id={resume.resumeId}
+                          checked={selectedResumes.includes(resume.resumeId)}
                           onCheckedChange={() => toggleResume(resume.resumeId)}
                         />
                         <Label
@@ -263,16 +293,16 @@ export default function ResumeMatcher() {
                     Job Opportunities
                   </Label>
                   <div className="flex items-center space-x-2">
-                    <Checkbox
+                    {/* <Checkbox
                       id="selectAllJobs"
                       checked={selectAllJobs}
                       onCheckedChange={toggleSelectAllJobs}
-                    />
+                    /> */}
                     <Label
                       htmlFor="selectAllJobs"
                       className="text-sm font-medium"
                     >
-                      Select ALL Jobs
+                      Select Jobs
                     </Label>
                   </div>
                 </div>

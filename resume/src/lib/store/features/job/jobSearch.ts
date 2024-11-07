@@ -1,5 +1,5 @@
 // redux/jobSlice.ts
-import { Job } from "@/types/job";
+import { Job, searchJobApi } from "@/types/job";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../../store";
 // import { format } from "date-fns";
@@ -15,6 +15,7 @@ export interface SearchJob {
 
 interface JobsState {
   jobs: Job[];
+  interResumejobs:Job[]
   totalJobs: number;
   loading: boolean;
   error: string | null;
@@ -22,17 +23,24 @@ interface JobsState {
   jobLocation: string; // Add jobLocation to state
   datePosted: Date ; // Add datePosted to state
   currentPage: number;
+  reset: boolean;
 }
 
 const initialState: JobsState = {
   jobs: [],
+  interResumejobs: [],
   totalJobs: 0,
   loading: false,
   error: null,
   jobTitle: '', // Initialize as empty string
   jobLocation: '', // Initialize as empty string
-  datePosted: new Date(), // Set current date
-  currentPage:1
+  datePosted: (function() {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1); // Subtract one month
+    return date;
+  })(), // Set date to one month ago
+  currentPage:1,
+  reset:true
 };
 
 export const searchJobs = createAsyncThunk(
@@ -60,10 +68,12 @@ export const searchJobs = createAsyncThunk(
       }
     );
 
-    if (!response.ok) throw new Error("Failed to search jobs");
+    const data:searchJobApi = await response.json();
 
-    const data = await response.json();
-    return { joblists: data.joblists, totalJoblists: data.totalJoblists }; // Adjusted to match your API response
+    if(!data.success) throw new Error("Failed to search jobs");
+    console.log(data.message,data.data);
+    
+    return { joblists: data.data.joblists, totalJoblists: data.data.totalJoblists }; // Adjusted to match your API response
   }
 );
 
@@ -71,16 +81,39 @@ export const searchJobs = createAsyncThunk(
 export const clearSearch = createAsyncThunk(
   "jobs/clearSearch",
   async (_, { dispatch }) => {
-    dispatch(fetchJobs({ page: 1, limit: 10 }));
     dispatch(setJobTitle(''));
     dispatch(setJobLocation(''));
-    dispatch(setDatePosted(new Date()));
+    dispatch(setDatePosted((function() {
+      const date = new Date();
+      date.setMonth(date.getMonth() - 1); // Subtract one month
+      return date;
+    })()));
   }
 );
 
 export const fetchJobs = createAsyncThunk(
   "jobs/fetchJobs",
-  async ({ page, limit = 10 }: { page: number; limit: number }, { rejectWithValue }) => {
+  async ({ page, limit = 10 }: { page: number; limit: number }, {  rejectWithValue }) => {
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/job/list?page=${page}&limit=${limit}`
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch jobs");
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.log("error", error);
+      return rejectWithValue("Failed to fetch jobs. Please try again.");
+    }
+  }
+);
+export const fetchResumeJobs = createAsyncThunk(
+  "jobs/fetchResumeJobs",
+  async ({ page, limit = 10 }: { page: number; limit: number }, {  rejectWithValue }) => {
+
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/job/list?page=${page}&limit=${limit}`
@@ -98,6 +131,7 @@ export const fetchJobs = createAsyncThunk(
 );
 
 
+
 const jobSlice = createSlice({
   name: "jobs",
   initialState,
@@ -111,6 +145,12 @@ const jobSlice = createSlice({
     setDatePosted(state, action: PayloadAction<Date>) {
       state.datePosted = action.payload;
     },
+    setReset(state, action: PayloadAction<boolean>) {
+      state.reset = action.payload; // Directly set reset value
+    },
+    setCurrentPage(state, action: PayloadAction<number>) {
+      state.currentPage = action.payload; // Update currentPage when changing pages
+    }
   },
   
   extraReducers: (builder) => {
@@ -119,12 +159,12 @@ const jobSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
+      .addCase(fetchResumeJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
         // Remove duplicates before merging
         const uniqueJobs = action.payload.joblists.filter(job => 
           !state.jobs.some(existingJob => existingJob._id === job._id)
         );
-        state.jobs = [...state.jobs, ...uniqueJobs];
+        state.interResumejobs = [...state.jobs, ...uniqueJobs];
         state.totalJobs = action.payload.totalJoblists;
         state.loading = false;
       })
@@ -132,9 +172,18 @@ const jobSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+
+      .addCase(fetchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
+        // Remove duplicates before merging
+        // const uniqueJobs = action.payload.joblists.filter(job => 
+        //   !state.jobs.some(existingJob => existingJob._id === job._id)
+        // );
+        // state.jobs = [...state.jobs, ...uniqueJobs];
+        state.jobs=action.payload.joblists
+        state.totalJobs = action.payload.totalJoblists;
+        state.loading = false;
+      })
       .addCase(searchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
-        console.log("job list",action.payload.joblists)
-        console.log("total  job number",action.payload.totalJoblists)
         state.jobs = action.payload.joblists;
         state.totalJobs = action.payload.totalJoblists;
         state.loading = false;
@@ -143,6 +192,6 @@ const jobSlice = createSlice({
   },
 });
 
-export const { setJobTitle, setJobLocation, setDatePosted } = jobSlice.actions;
+export const { setJobTitle, setJobLocation, setDatePosted,setReset,setCurrentPage } = jobSlice.actions;
 
 export default jobSlice.reducer;

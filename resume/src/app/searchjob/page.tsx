@@ -1,5 +1,6 @@
 // components/JobScraper.tsx
 "use client";
+import Tour from "@/components/Tour";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/popover";
 import Sidebar from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { searchStep } from "@/constant/tourdata";
 import { format } from "date-fns";
 import {
   Briefcase,
@@ -26,10 +28,10 @@ import {
   clearSearch,
   fetchJobs,
   searchJobs,
+  setCurrentPage,
+  setReset,
 } from "../../lib/store/features/job/jobSearch";
 import { AppDispatch, RootState } from "../../lib/store/store";
-import { searchStep } from "@/constant/tourdata";
-import Tour from "@/components/Tour";
 
 const JobCard = lazy(() => import("@/components/ui/jobCard"));
 
@@ -44,21 +46,23 @@ export default function JobScraper() {
     jobLocation,
     datePosted,
     currentPage,
+    reset,
   } = useSelector((state: RootState) => state.jobs);
 
   useEffect(() => {
-    // Fetch jobs if not already in store
-    if (!jobs.length) {
+    // Dispatch fetchJobs unconditionally; Redux will handle the check
+    if (reset) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
+      dispatch(setReset(false)); // Reset after fetching to prevent re-trigger
+      dispatch(setCurrentPage(1));
     }
-  }, [dispatch, jobs.length]);
+  }, [dispatch, reset]);
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
 
     try {
       await dispatch(searchJobs()).unwrap();
-
     } catch (error) {
       toast.error("Search Failed ");
       console.log(error);
@@ -67,12 +71,43 @@ export default function JobScraper() {
 
   const handleClearSearch = () => {
     dispatch(clearSearch());
+    dispatch(setReset(true));
   };
-  const totalPages = Math.ceil(totalJobs / 10); // Assuming 10 jobs per page
+  const PAGE_LIMIT = 10; // Number of jobs per page
+  const MAX_VISIBLE_PAGES = 8; // Max visible page buttons
 
-  const handlePageChange = (pages: number) => {
-    if (pages !== currentPage) {
-      dispatch(fetchJobs({ page: pages, limit: 10 })); // Fetch only the jobs for the new page
+  const totalPages = Math.ceil(totalJobs / PAGE_LIMIT);
+
+  // Calculate the page range to display
+  const calculatePageRange = (currentPage: number) => {
+    const start = Math.max(currentPage - Math.floor(MAX_VISIBLE_PAGES / 2), 1);
+    const end = Math.min(start + MAX_VISIBLE_PAGES - 1, totalPages);
+
+    // Adjust the range if the end goes beyond the total pages
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  };
+
+  // Handle page change with edge cases (previous and next buttons)
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      const newPage = currentPage - 1;
+      dispatch(setCurrentPage(newPage)); // Update the page in Redux
+      dispatch(fetchJobs({ page: newPage, limit: 10 })); // Fetch jobs for the previous page
+    }
+  };
+
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      const newPage = currentPage + 1;
+      dispatch(setCurrentPage(newPage)); // Update the page in Redux
+      dispatch(fetchJobs({ page: newPage, limit: 10 })); // Fetch jobs for the next page
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page !== currentPage) {
+      dispatch(setCurrentPage(page)); // Update the page in Redux
+      dispatch(fetchJobs({ page, limit: 10 })); // Fetch jobs for the selected page
     }
   };
 
@@ -236,20 +271,41 @@ export default function JobScraper() {
 
             {/* Pagination Controls */}
             <div className="flex justify-center space-x-4 py-4">
-              {Array.from({ length: totalPages }, (_, index) => (
+              {/* Previous Button */}
+              <Button
+                variant="outline"
+                onClick={handlePrevious}
+                disabled={currentPage === 1}
+                className="px-4 text-blue-600"
+              >
+                Previous
+              </Button>
+
+              {/* Page Buttons */}
+              {calculatePageRange(currentPage).map((page) => (
                 <Button
-                  key={index + 1}
+                  key={page}
                   variant="outline"
-                  onClick={() => handlePageChange(index + 1)}
-                  className={`px-4 ${
-                    currentPage === index + 1
-                      ? "bg-blue-600 text-white"
-                      : "text-blue-600"
+                  onClick={() => handlePageChange(page)}
+                  className={`px-4 py-2 rounded-md transition duration-200 ${
+                    currentPage === page
+                      ? "bg-blue-600 text-white" // Active button color
+                      : "bg-white text-blue-600 hover:bg-blue-100" // Inactive button color
                   }`}
                 >
-                  {index + 1}
+                  {page}
                 </Button>
               ))}
+
+              {/* Next Button */}
+              <Button
+                variant="outline"
+                onClick={handleNext}
+                disabled={currentPage === totalPages}
+                className="px-4 text-blue-600"
+              >
+                Next
+              </Button>
             </div>
           </div>
         </div>

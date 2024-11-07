@@ -18,7 +18,7 @@ import ErrorHandler from "../utils/utitlity.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
+async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
   const prompt = `
     Evaluate the following resume against the job description. For each criterion, provide a score out of 100:
     - Relevance to the job role
@@ -28,7 +28,14 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
 
     Also, calculate a composite score. If the composite score is below ${fitThreshold}, include a recommendation for improvement.
 
-    Respond strictly in the following JSON format without any additional text:
+    Resume:
+    ${resumeText}
+
+    Job Description:
+    ${jobDescription}
+
+    Note: 
+    Respond strictly in the following JSON format without any additional text. below is the JSON Structure:
     {
       "scores": {
         "relevance": <score>,
@@ -38,21 +45,19 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
       },
       "compositeScore": <score>,
       "recommendation": "<one concise suggestion if applicable>"
+      "isfit":true/false
     }
 
-    Make sure not to include any other text or formatting, only the JSON object.
-
-    Resume:
-    ${resumeText}
-
-    Job Description:
-    ${jobDescription}
   `;
 
   try {
     const chatSession = genAIModel.startChat({ history: [] });
     const result = await chatSession.sendMessage(prompt);
     let response = result.response.text().trim();
+    // Save the response as plain text
+    // const filePath = path.join(__dirname, `evaluation_response_${id}.txt`);
+    // fs.writeFileSync(filePath, response, "utf-8");
+    // console.log("Evaluation response saved to:", filePath);
 
     // Function to check if the response is valid JSON
     const isValidJSON = (text) => {
@@ -60,7 +65,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
         JSON.parse(text);
         return true;
       } catch {
-        console.log("it is not a valid JSON");
+        console.log("It is not a valid JSON.");
         return false;
       }
     };
@@ -71,30 +76,17 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
       response = await chatSession.sendMessage(
         prompt + "\n\nPlease ensure your response is in valid JSON format."
       );
+      console.log("it is now in JSON format");
       response = response.response.text().trim();
     }
 
-    // Parse the validated JSON response
-    const jsonResponse = JSON.parse(response);
-
     return {
       evaluationText: response,
-      scores: jsonResponse.scores,
-      compositeScore: jsonResponse.compositeScore,
-      recommendation: jsonResponse.recommendation,
     };
   } catch (error) {
     console.error("Error fetching LLM evaluation:", error);
     return {
       evaluationText: "Evaluation results not found.",
-      scores: {
-        relevance: 0,
-        skills: 0,
-        experience: 0,
-        presentation: 0,
-      },
-      compositeScore: 0,
-      recommendation: null,
     };
   }
 }
@@ -161,7 +153,7 @@ export const matcher = TryCatch(async (req, res, next) => {
         const jobDescription = jobData.description;
 
         const { evaluationText, compositeScore, scores, recommendation } =
-          await getLLMEvaluation(resumeText, jobDescription, fitThreshold);
+          await getLLMEvaluation(resumeText, jobDescription, fitThreshold,jobData._id);
 
         // Save the evaluation to JobMatching
         const jobMatchingEntry = new JobMatching({

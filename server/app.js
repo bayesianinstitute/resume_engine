@@ -20,6 +20,14 @@ const port = process.env.PORT || 5000;
 const host = process.env.HOST || "127.0.0.1";
 const mongoDBUrl = process.env.MONGODB_URL;
 
+export const PUBLIC_GEOAPIFY_API_KEY=process.env.PUBLIC_GEOAPIFY_API_KEY 
+
+if (!PUBLIC_GEOAPIFY_API_KEY){
+  console.error("Public GeoAPIFY API Key is not provided in the environment variables.");
+  process.exit(1); // Exit with failure
+ 
+}
+
 // Middleware setup
 app.use(express.json());
 app.use(morgan("dev"));
