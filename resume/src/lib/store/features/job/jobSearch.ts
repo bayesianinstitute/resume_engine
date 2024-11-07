@@ -110,6 +110,7 @@ export const fetchJobs = createAsyncThunk(
     }
   }
 );
+
 export const fetchResumeJobs = createAsyncThunk(
   "jobs/fetchResumeJobs",
   async ({ page, limit = 10 }: { page: number; limit: number }, {  rejectWithValue }) => {
@@ -150,7 +151,13 @@ const jobSlice = createSlice({
     },
     setCurrentPage(state, action: PayloadAction<number>) {
       state.currentPage = action.payload; // Update currentPage when changing pages
-    }
+    },
+    addJobb(state, action: PayloadAction<Job[]>) {
+      for (const job of action.payload) {
+        state.jobs.push(job);
+        state.totalJobs += 1; // Increment totalJobs for each added job
+      }
+    },
   },
   
   extraReducers: (builder) => {
@@ -174,12 +181,12 @@ const jobSlice = createSlice({
       })
 
       .addCase(fetchJobs.fulfilled, (state, action: PayloadAction<{ joblists: Job[], totalJoblists: number }>) => {
-        // Remove duplicates before merging
-        // const uniqueJobs = action.payload.joblists.filter(job => 
-        //   !state.jobs.some(existingJob => existingJob._id === job._id)
-        // );
-        // state.jobs = [...state.jobs, ...uniqueJobs];
-        state.jobs=action.payload.joblists
+        const uniqueJobs = action.payload.joblists.filter(job => 
+          !state.jobs.some(existingJob => existingJob._id === job._id)
+        );
+        state.jobs = [...state.jobs, ...uniqueJobs];
+
+        // state.jobs=action.payload.joblists
         state.totalJobs = action.payload.totalJoblists;
         state.loading = false;
       })
@@ -192,6 +199,6 @@ const jobSlice = createSlice({
   },
 });
 
-export const { setJobTitle, setJobLocation, setDatePosted,setReset,setCurrentPage } = jobSlice.actions;
+export const { setJobTitle, setJobLocation, setDatePosted,setReset,setCurrentPage,addJobb } = jobSlice.actions;
 
 export default jobSlice.reducer;

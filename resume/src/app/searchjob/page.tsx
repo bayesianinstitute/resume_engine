@@ -55,8 +55,9 @@ export default function JobScraper() {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
       dispatch(setReset(false)); // Reset after fetching to prevent re-trigger
       dispatch(setCurrentPage(1));
+
     }
-  }, [dispatch, reset]);
+  }, [dispatch, reset,jobTitle]);
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();

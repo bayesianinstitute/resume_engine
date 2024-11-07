@@ -23,8 +23,12 @@ import { AddJobApi, AddJobForm, AutoJob, AutoJobApi, Feature } from "@/types/job
 import { toast } from "react-toastify";
 
 import { Loader2 } from "lucide-react";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/lib/store/store";
+import { addJobb } from "@/lib/store/features/job/jobSearch";
 
 export default function JobTabs() {
+  const dispatch=useDispatch<AppDispatch>()
   const [formData, setFormData] = useState<AddJobForm>({
     title: "",
     location: "",
@@ -158,6 +162,10 @@ export default function JobTabs() {
     const responseData: AddJobApi = await response.json();
     if (responseData.success) {
       toast.success(responseData.message);
+      if (responseData.joblist && responseData.joblist.length > 0) {
+        dispatch(addJobb(responseData.joblist)); 
+      }
+
       setFormData({
         title: "",
         location: "",
@@ -202,7 +210,12 @@ export default function JobTabs() {
       );
       const responseData: AutoJobApi = await response.json();
       if (responseData.success) {
+
         toast.success(responseData.message);
+        if (responseData.joblist && responseData.joblist.length > 0) {
+          dispatch(addJobb(responseData.joblist)); 
+        }
+        
       } else {
         toast.error(responseData.message);
       }

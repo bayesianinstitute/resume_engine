@@ -42,13 +42,15 @@ export interface AutoJob {
 export interface AddJobApi{
     message: string;
     success: boolean;
-    joblist: Job[] | null;
+    joblist: Job[] ;
     
 }
 
 export interface AutoJobApi{
     message: string;
-    success: boolean;    
+    success: boolean;   
+    joblist: Job[] ;
+
 }
 
 export interface searchJobApi{

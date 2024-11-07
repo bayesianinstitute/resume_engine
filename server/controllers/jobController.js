@@ -113,7 +113,8 @@ export const scrapJob = TryCatch(async (req, res, next) => {
       .json({ 
         message: `Total jobs found: ${total_jobs}. New jobs saved: ${newJobsCount}. Jobs already in database: ${existingJobsCount}.`,
         success: true,
-        newJobs
+        joblist: newJobs
+        
       });
   } catch (error) {
     return next(new ErrorHandler("Error while scraping jobs", 500));
