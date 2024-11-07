@@ -1,4 +1,3 @@
-// components/ResumeMatcher.tsx
 "use client";
 
 import { ResumeMatchResults } from "@/components/resume-match-results";
@@ -24,7 +23,7 @@ import useInfiniteScroll from "react-infinite-scroll-hook";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import { AppDispatch, RootState } from "../../lib/store/store";
-
+import { io } from "socket.io-client"; // Import socket.io-client
 import { useRouter } from "next/navigation";
 
 export default function ResumeMatcher() {
@@ -32,8 +31,8 @@ export default function ResumeMatcher() {
   const [timeFilter, setTimeFilter] = useState("week");
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
-  // const [selectAllJobs, setSelectAllJobs] = useState(false);
-  const [results, setResults] = useState<MatchResult[]>([]); // State to store matching results
+  const [selectAllJobs, setSelectAllJobs] = useState(false);
+  const [results, setResults] = useState<MatchResult[]>([]);
   const { resumes } = useSelector((state: RootState) => state.resume);
   const { jobs, loading, totalJobs,isSearch } = useSelector(
     (state: RootState) => state.jobs
@@ -43,13 +42,11 @@ export default function ResumeMatcher() {
   const router = useRouter();
 
   useEffect(() => {
-    // Fetch jobs if not already in store
-    if (!jobs.length || isSearch) {
+    if (!jobs.length) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
       dispatch(setIsSearch(false))
     }
 
-    // Fetch resumes if not already in store
     if (!resumes.length && auth.userId) {
       dispatch(fetchResumes(auth.userId));
     }
@@ -69,6 +66,7 @@ export default function ResumeMatcher() {
         return true;
     }
   });
+
   const loadMoreJobs = useCallback(() => {
     if (!loading && jobs.length < totalJobs) {
       const nextPage = currentPage + 1;
@@ -76,6 +74,7 @@ export default function ResumeMatcher() {
       dispatch(fetchJobs({ page: nextPage, limit: 10 }));
     }
   }, [currentPage, loading, jobs.length, totalJobs, dispatch]);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasNextPage = jobs.length < totalJobs;
   const [sentryRef] = useInfiniteScroll({
@@ -83,29 +82,30 @@ export default function ResumeMatcher() {
     hasNextPage,
     onLoadMore: loadMoreJobs,
     rootMargin: "0px 0px 400px 0px",
-    // rootRef: scrollAreaRef,
   });
 
-  // const toggleSelectAll = (checked: boolean) => {
-  //   if (checked) {
-  //     const resumeIds = resumes.map((resume) => resume.resumeId);
-  //     setSelectedJobs((prevSelected) => [
-  //       ...prevSelected.filter((id) =>
-  //         filteredJobs.some((job) => job._id === id)
-  //       ),
-  //       ...resumeIds,
-  //     ]);
-  //   } else {
-  //     setSelectedJobs((prevSelected) =>
-  //       prevSelected.filter((id) => filteredJobs.some((job) => job._id === id))
-  //     );
-  //   }
-  // };
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const resumeIds = resumes.map((resume) => resume.resumeId);
+      setSelectedJobs((prevSelected) => [
+        ...prevSelected.filter((id) =>
+          filteredJobs.some((job) => job._id === id)
+        ),
+        ...resumeIds,
+      ]);
+    } else {
+      setSelectedJobs((prevSelected) =>
+        prevSelected.filter((id) =>
+          filteredJobs.some((job) => job._id === id)
+        )
+      );
+    }
+  };
 
-  // const toggleSelectAllJobs = (checked: boolean) => {
-  //   setSelectAllJobs(checked);
-  //   setSelectedJobs(checked ? filteredJobs.map((job) => job._id) : []);
-  // };
+  const toggleSelectAllJobs = (checked: boolean) => {
+    setSelectAllJobs(checked);
+    setSelectedJobs(checked ? filteredJobs.map((job) => job._id) : []);
+  };
 
   const toggleResume = (id: string) => {
     setSelectedResumes((prev) => {
@@ -126,36 +126,23 @@ export default function ResumeMatcher() {
   };
 
   const toggleJob = (jobId: string) => {
-    setSelectedJobs((prev) => {
-      // If the job is already selected, deselect it
-      if (prev.includes(jobId)) {
-        return prev.filter((id) => id !== jobId);
-      }
-      // If fewer than 2 jobs are selected, allow selecting this job
-      else if (prev.length < 2) {
-        return [...prev, jobId];
-      }
-      // Prevent adding more than 2 jobs
-      else {
-        toast.warning("You can only select up to 2 jobs.");
-        return prev;
-      }
-    });
+    setSelectedJobs((prev) =>
+      prev.includes(jobId)
+        ? prev.filter((id) => id !== jobId)
+        : [...prev, jobId]
+    );
   };
 
   const handleMatch = async () => {
     console.log(selectedJobs);
-    // const resumeEntryIds = selectedJobs.filter((jobId) =>
-    //   resumes.some((resume) => resume.resumeId === jobId)
-    // );
-    // const jobIds = selectedJobs.filter((jobId) =>
-    //   filteredJobs.some((job) => job._id === jobId)
-    // );
+    const resumeEntryIds = selectedJobs.filter((jobId) =>
+      resumes.some((resume) => resume.resumeId === jobId)
+    );
+    const jobIds = selectedJobs.filter((jobId) =>
+      filteredJobs.some((job) => job._id === jobId)
+    );
 
-    const resumeEntryIds = selectedResumes; // Use selectedResumes for resumes
-    const jobIds = selectedJobs; // Use selectedJobs for jobs
-
-    toast(`Sent Job Matcher Request`);
+    toast.info(`Sent Job Matcher Request`);
 
     try {
       const response = await fetch(
@@ -172,8 +159,7 @@ export default function ResumeMatcher() {
       const data: MatchResultResponse = await response.json();
       if (data.success) {
         toast.success(data.message);
-
-        setResults(data.results); // Store the results in state
+        setResults(data.results);
       } else {
         toast.error(data.message);
       }
@@ -182,16 +168,33 @@ export default function ResumeMatcher() {
     }
   };
 
+  // WebSocket setup for real-time updates
+  useEffect(() => {
+    const socket = io(process.env.NEXT_PUBLIC_BASE_WS_URL || "http://localhost:5000");
+
+    socket.on("progress", (data) => {
+      toast.info(`Progress: ${data.resumeName} -> ${data.jobTitle}`);
+    });
+
+    socket.on("done", (data) => {
+      console.log(data);
+      toast.success("Matching process completed!");
+      socket.disconnect();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
-
       <div className="flex-1 ml-64 flex items-center justify-center">
         <div className="flex-1 p-6">
           <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100 text-center mb-8">
             Resume Matching Tool
           </h1>
-
           <p className="text-lg text-center text-gray-600 dark:text-gray-300 mb-8">
             Unlock your interview potential with our tailored resources,
             carefully curated to match your resume with the perfect job
@@ -203,22 +206,25 @@ export default function ResumeMatcher() {
                 Job Matcher
               </CardTitle>
               <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 text-center">
-                Note: Matching one resume with multiple job descriptions or multiple resumes with multiple job descriptions may take some time. Please be patient.
+                Note: Matching one resume with multiple job descriptions or
+                multiple resumes with multiple job descriptions may take some
+                time. Please be patient.
               </p>
-
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Resumes Section */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  {/* <Checkbox
+                  <Checkbox
                     id="selectAll"
                     checked={
-                      resumes.length > 0 && resumes.every((resume) =>
+                      resumes.length > 0 &&
+                      resumes.every((resume) =>
                         selectedJobs.includes(resume.resumeId)
                       )
                     }
                     onCheckedChange={toggleSelectAll}
-                  /> */}
+                  />
                   <Label
                     htmlFor="selectAll"
                     className="text-sm font-medium leading-none"
@@ -247,33 +253,37 @@ export default function ResumeMatcher() {
                         key={resume.resumeId}
                         className="flex items-center space-x-2"
                       >
-                        {/* <Checkbox
+                        <Checkbox
                           id={resume.resumeId}
                           checked={selectedJobs.includes(resume.resumeId)}
                           onCheckedChange={() => toggleResume(resume.resumeId)}
-                        /> */}
-                        <Checkbox
+                        />
+                        {/* <Checkbox
                           id={resume.resumeId}
                           checked={selectedResumes.includes(resume.resumeId)}
                           onCheckedChange={() => toggleResume(resume.resumeId)}
-                        />
-                      <Label
-                        htmlFor={resume.resumeId}
-                        className="text-sm leading-none flex items-center truncate"
-                        title={resume.filename} // Show full name on hover
-                        style={{ maxWidth: 'calc(100% - 40px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
-                        {resume.filename}
-                      </Label>
-
-
+                        /> */}
+                        <Label
+                          htmlFor={resume.resumeId}
+                          className="text-sm leading-none flex items-center truncate"
+                          title={resume.filename}
+                          style={{
+                            maxWidth: "calc(100% - 40px)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
+                          {resume.filename}
+                        </Label>
                       </div>
                     ))
                   )}
                 </div>
               </div>
 
+              {/* Jobs Section */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Time Filter</Label>
                 <RadioGroup
@@ -302,11 +312,11 @@ export default function ResumeMatcher() {
                     Job Opportunities
                   </Label>
                   <div className="flex items-center space-x-2">
-                    {/* <Checkbox
+                    <Checkbox
                       id="selectAllJobs"
                       checked={selectAllJobs}
                       onCheckedChange={toggleSelectAllJobs}
-                    /> */}
+                    />
                     <Label
                       htmlFor="selectAllJobs"
                       className="text-sm font-medium"

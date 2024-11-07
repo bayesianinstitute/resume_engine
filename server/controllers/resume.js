@@ -14,6 +14,8 @@ import { Job } from "../models/jobTracker.js";
 import { JobMatching } from "../models/JobMatching.js"; // Import your JobMatching model
 import { TryCatch } from "../middleware/error.js";
 import ErrorHandler from "../utils/utitlity.js";
+import { io } from "../socket.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,6 +105,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
 }
 
 
+
 export const matcher = TryCatch(async (req, res, next) => {
   const {
     resumeEntryIds,
@@ -111,9 +114,9 @@ export const matcher = TryCatch(async (req, res, next) => {
     selectallResume = false,
   } = req.body;
   const fitThreshold = 70;
+  let apiRequestCount = 0;
 
   try {
-    // Fetch all jobs if selectallJob is true; otherwise, fetch based on jobIds array
     const jobDataArray = selectallJob
       ? await Joblist.find()
       : await Joblist.find({ _id: { $in: jobIds } });
@@ -122,7 +125,6 @@ export const matcher = TryCatch(async (req, res, next) => {
       return next(new ErrorHandler("No jobs found.", 404));
     }
 
-    // Fetch all resumes if selectallResume is true; otherwise, use resumeEntryIds array
     const resumeIdsToFetch = selectallResume
       ? (await Resume.find()).flatMap((resume) =>
           resume.resumes.map((r) => r._id.toString())
@@ -136,7 +138,6 @@ export const matcher = TryCatch(async (req, res, next) => {
     const results = [];
 
     for (const resumeEntryId of resumeIdsToFetch) {
-      // Find the specific resume entry
       const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
       if (!resumeData) {
         results.push({ resumeEntryId, error: "Resume entry not found." });
@@ -154,20 +155,27 @@ export const matcher = TryCatch(async (req, res, next) => {
         continue;
       }
 
-      // Load resume text
       const resumePath = resumeEntry.resume;
       const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
       const resumeDocs = await pdfLoader.load();
       const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-      // Evaluate each job description against the resume text
       for (const jobData of jobDataArray) {
-        const jobDescription = jobData.description;
+        if (apiRequestCount >= 14) {
+          console.log("Rate limit reached, waiting for 1 minute...");
+          await new Promise((resolve) => setTimeout(resolve, 60000));
+          apiRequestCount = 0; // Reset the counter after the pause
+        }
 
-        const { evaluationText, compositeScore, scores, recommendation } =
-          await getLLMEvaluation(resumeText, jobDescription, fitThreshold,jobData._id);
+        const {
+          evaluationText,
+          compositeScore,
+          scores,
+          recommendation,
+        } = await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
 
-        // Save the evaluation to JobMatching
+        apiRequestCount++;
+
         const jobMatchingEntry = new JobMatching({
           resumeEntryId,
           jobId: jobData._id,
@@ -177,34 +185,40 @@ export const matcher = TryCatch(async (req, res, next) => {
         });
         await jobMatchingEntry.save();
 
-        let resultMessage;
-        if (compositeScore !== null && compositeScore >= fitThreshold) {
-          resultMessage = `You are a good fit for the job ${jobData.title} with a score of ${compositeScore}%.`;
-        } else {
-          resultMessage = `You are not a perfect fit for the job ${jobData.title} with a score of ${compositeScore}%. Please refer to the suggestions below for improving your application:\n\n${evaluationText}`;
-        }
-
-        console.log(resumeEntry.filename);
-        // Push result for each job evaluated
-        results.push({
+        const update = {
           resumeEntryId,
           resumeName: resumeEntry.filename,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
           jobId: jobData._id,
-          matchResult: resultMessage,
+          matchResult: compositeScore >= fitThreshold
+            ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
+            : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`,
           evaluationResponse: evaluationText,
-        });
+        };
+
+        results.push(update);
+
+        if (io) {
+          io.emit("progress", update); // Emit progress if `io` is available
+        } else {
+          console.warn("WebSocket not initialized");
+        }
       }
+
+      apiRequestCount = 0;
     }
 
-    // Return all results
+    if (io) {
+      io.emit("done", { message: "Matching completed", results });
+    }
+
     res.json({ message: "Match result", success: true, results });
   } catch (error) {
     console.error("Error processing resume match:", error);
     return next(
       new ErrorHandler(
-        "An error occurred while processing the resume match..",
+        "An error occurred while processing the resume match.",
         500
       )
     );

@@ -33,7 +33,8 @@
     "openai": "^4.67.3",
     "pdf-parse": "^1.1.1",
     "recaptcha-v2": "^0.1.3",
-    "selenium-webdriver": "^4.25.0"
+    "selenium-webdriver": "^4.25.0",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.8",

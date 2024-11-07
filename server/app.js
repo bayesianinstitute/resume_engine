@@ -8,26 +8,20 @@ import { connectDB } from "./utils/features.js";
 import userRouter from "./routes/user.js";
 import resumeRouter from "./routes/resume.js";
 import jobRouter from "./routes/jobRoutes.js";
+import { initSocket } from "./socket.js";
+import http from "http";
 
-// Load environment variables
-dotenv.config();
+dotenv.config(); // Load environment variables
 
 // Initialize Express app
 const app = express();
+const server = http.createServer(app);
 
-// Environment variables
+// Environment variables (define these before using them)
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || "127.0.0.1";
 const mongoDBUrl = process.env.MONGODB_URL;
-
-export const PUBLIC_GEOAPIFY_API_KEY=process.env.PUBLIC_GEOAPIFY_API_KEY 
-
-if (!PUBLIC_GEOAPIFY_API_KEY){
-  console.error("Public GeoAPIFY API Key is not provided in the environment variables.");
-  process.exit(1); // Exit with failure
- 
-}
-
+initSocket(server); // Initialize WebSocket
 // Middleware setup
 app.use(express.json());
 app.use(morgan("dev"));
@@ -43,13 +37,13 @@ export const myCache = new NodeCache();
 app.use("/api/v1/user", userRouter);
 app.use("/api/v1/resume", resumeRouter);
 app.use("/api/v1/job", jobRouter);
+
 // Error middleware
 app.use(errorMiddleware);
 
 // Start server and connect to MongoDB
-app.listen(port, host, async () => {
+server.listen(port, async () => {  // Ensure 'server.listen' uses the defined 'port'
   if (!mongoDBUrl) {
-
     console.error("MongoDB URL is not provided in the environment variables.");
     process.exit(1); // Exit with failure
   }
