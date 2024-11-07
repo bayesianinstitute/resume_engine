@@ -6,7 +6,7 @@ import { Resume } from "../models/resume.js";
 import { Joblist } from "../models/jobModel.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
-import { genAIModel, openai } from "../utils/chatAI.js";
+import {  genAI, openai } from "../utils/chatAI.js";
 import { ObjectId } from "mongodb";
 // import { PDFLoader } from 'pdf-loader-library';
 import { fileURLToPath } from "url";
@@ -16,11 +16,19 @@ import { TryCatch } from "../middleware/error.js";
 import ErrorHandler from "../utils/utitlity.js";
 import { io } from "../socket.js";
 
+import { resume_matchschema } from "../models/gemini.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash-latest",
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: resume_matchschema,
+    },
+  });
   const prompt = `
     Evaluate the following resume against the job description. For each criterion, provide a score out of 100:
     - Relevance to the job role
@@ -37,7 +45,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
     ${jobDescription}
 
     Note: 
-    Respond strictly in the following JSON format without any additional text. below is the JSON Structure:
+    Respond strictly in the following JSON format:
     {
       "scores": {
         "relevance": <score>,
@@ -46,16 +54,20 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
         "presentation": <score>
       },
       "compositeScore": <score>,
-      "recommendation": "<one concise suggestion if applicable>"
-      "isfit":true/false
+      "recommendation": "<one concise suggestion if applicable>",
+      "isfit": true/false
     }
-
   `;
 
+
   try {
-    const chatSession = genAIModel.startChat({ history: [] });
-    const result = await chatSession.sendMessage(prompt);
-    let response = result.response.text().trim();
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+
+
+    // const chatSession = genAIModel.startChat({ history: [] });
+    // const result = await chatSession.sendMessage(prompt);
+    // let response = result.response.text().trim();
 
     // Function to check if the response is valid JSON
     const isValidJSON = (text) => {

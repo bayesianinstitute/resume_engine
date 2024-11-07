@@ -1,5 +1,4 @@
 "use client";
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,10 +17,10 @@ import {
   setPrepResources,
 } from "@/lib/store/features/job/jobSlice";
 import { AppDispatch, RootState } from "@/lib/store/store";
-import { preparationAPIResponse, PrepResource } from "@/types/interview";
+import { InterviewQuestion, preparationAPIResponse, PrepResource } from "@/types/interview";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, Download, List, MessageSquare } from "lucide-react";
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
@@ -81,11 +80,11 @@ export default function InterviewPreparation() {
           body: JSON.stringify({ jobDescription }),
         }
       );
-
-      const responseData: preparationAPIResponse = await response.json();
+      const responseData: preparationAPIResponse=await response.json();
       if (responseData.success) {
-        const prepResources: PrepResource[] = parsePreparationResources(
-          responseData.data
+        const parsedData:InterviewQuestion = JSON.parse(responseData.data);
+        const prepResources = parsePreparationResources(
+          parsedData
         );
 
         dispatch(setPrepResources(prepResources));

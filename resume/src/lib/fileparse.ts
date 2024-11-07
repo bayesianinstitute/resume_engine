@@ -1,69 +1,43 @@
-import { PrepResource } from "@/types/interview";
+import { InterviewQuestion, PrepResource } from "@/types/interview";
 import { Document, Packer, Paragraph, TextRun } from "docx";
-import { jsPDF } from "jspdf";
 import { saveAs } from "file-saver";
+import { jsPDF } from "jspdf";
 import { marked } from "marked";
 
-export function parsePreparationResources(text: string): PrepResource[] {
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line);
+export function parsePreparationResources(data: InterviewQuestion): PrepResource[] {
   const resources: PrepResource[] = [];
 
-  let currentType: "topic" | "question" | "tip" | null = null;
-  let buffer: string[] = [];
-  let currentTitle: string = "";
-
-  lines.forEach((line) => {
-    if (line.startsWith("**Key Skills:**")) {
-      if (buffer.length && currentType) {
-        resources.push({
-          title: currentTitle,
-          content: buffer.join("\n"),
-          type: currentType,
-        });
-      }
-      currentType = "topic";
-      currentTitle = "Key Skills";
-      buffer = [];
-    } else if (line.startsWith("**Interview Questions:**")) {
-      if (buffer.length && currentType) {
-        resources.push({
-          title: currentTitle,
-          content: buffer.join("\n"),
-          type: currentType,
-        });
-      }
-      currentType = "question";
-      currentTitle = "Interview Questions";
-      buffer = [];
-    } else if (line.startsWith("**Preparation Tips:**")) {
-      if (buffer.length && currentType) {
-        resources.push({
-          title: currentTitle,
-          content: buffer.join("\n"),
-          type: currentType,
-        });
-      }
-      currentType = "tip";
-      currentTitle = "Preparation Tips";
-      buffer = [];
-    } else {
-      buffer.push(line);
-    }
-  });
-
-  if (buffer.length && currentType) {
+  // Create a "topic" for key skills if they exist
+  if (data.keySkills.length) {
     resources.push({
-      title: currentTitle,
-      content: buffer.join("\n"),
-      type: currentType,
+      title: "Key Skills",
+      content: data.keySkills.join("\n"),
+      type: "topic",  // "topic" type for key skills
+    });
+  }
+
+  // Create a "question" for interview questions if they exist
+  if (data.interviewQuestions.length) {
+    resources.push({
+      title: "Interview Questions",
+      content: data.interviewQuestions.join("\n"),
+      type: "question",  // "question" type for interview questions
+    });
+  }
+
+  // Create a "tip" for preparation tips if they exist
+  if (data.preparationTips.length) {
+    resources.push({
+      title: "Preparation Tips",
+      content: data.preparationTips.join("\n"),
+      type: "tip",  // "tip" type for preparation tips
     });
   }
 
   return resources;
 }
+
+
 
 export const downloadPrepResourcePDF = (prepResources: PrepResource[]) => {
   if (!prepResources || prepResources.length === 0) {

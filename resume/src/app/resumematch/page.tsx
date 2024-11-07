@@ -29,7 +29,6 @@ import { useRouter } from "next/navigation";
 export default function ResumeMatcher() {
   const dispatch = useDispatch<AppDispatch>();
   const [timeFilter, setTimeFilter] = useState("week");
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectAllJobs, setSelectAllJobs] = useState(false);
   const [results, setResults] = useState<MatchResult[]>([]);
@@ -42,7 +41,7 @@ export default function ResumeMatcher() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!jobs.length) {
+    if (!jobs.length || isSearch) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
       dispatch(setIsSearch(false))
     }
@@ -107,22 +106,13 @@ export default function ResumeMatcher() {
     setSelectedJobs(checked ? filteredJobs.map((job) => job._id) : []);
   };
 
-  const toggleResume = (id: string) => {
-    setSelectedResumes((prev) => {
-      // If the resume is already selected, deselect it
-      if (prev.includes(id)) {
-        return prev.filter((r) => r !== id);
-      }
-      // If fewer than 2 resumes are selected, allow selecting this resume
-      else if (prev.length < 2) {
-        return [...prev, id];
-      }
-      // Prevent adding more than 2 resumes
-      else {
-        toast.warning("You can only select up to 2 resumes.");
-        return prev;
-      }
-    });
+
+  const toggleResume = (resumeId: string) => {
+    setSelectedJobs((prev) =>
+      prev.includes(resumeId)
+        ? prev.filter((id) => id !== resumeId)
+        : [...prev, resumeId]
+    );
   };
 
   const toggleJob = (jobId: string) => {
