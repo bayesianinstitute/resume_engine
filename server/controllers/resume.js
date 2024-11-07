@@ -54,10 +54,6 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
     const chatSession = genAIModel.startChat({ history: [] });
     const result = await chatSession.sendMessage(prompt);
     let response = result.response.text().trim();
-    // Save the response as plain text
-    // const filePath = path.join(__dirname, `evaluation_response_${id}.txt`);
-    // fs.writeFileSync(filePath, response, "utf-8");
-    // console.log("Evaluation response saved to:", filePath);
 
     // Function to check if the response is valid JSON
     const isValidJSON = (text) => {
@@ -65,7 +61,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
         JSON.parse(text);
         return true;
       } catch {
-        console.log("It is not a valid JSON.");
+        console.log("it is not a valid JSON");
         return false;
       }
     };
@@ -76,20 +72,36 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
       response = await chatSession.sendMessage(
         prompt + "\n\nPlease ensure your response is in valid JSON format."
       );
-      console.log("it is now in JSON format");
       response = response.response.text().trim();
     }
 
+    // Parse the validated JSON response
+    const jsonResponse = JSON.parse(response);
+
     return {
       evaluationText: response,
+      scores: jsonResponse.scores,
+      compositeScore: jsonResponse.compositeScore,
+      recommendation: jsonResponse.recommendation,
     };
+
   } catch (error) {
-    console.error("Error fetching LLM evaluation:", error);
+    console.error("Error during evaluation:", error.message);
+
     return {
       evaluationText: "Evaluation results not found.",
+      scores: {
+        relevance: 0,
+        skills: 0,
+        experience: 0,
+        presentation: 0,
+      },
+      compositeScore: 0,
+      recommendation: null,
     };
   }
 }
+
 
 export const matcher = TryCatch(async (req, res, next) => {
   const {

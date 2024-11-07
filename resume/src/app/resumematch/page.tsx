@@ -201,6 +201,10 @@ export default function ResumeMatcher() {
               <CardTitle className="text-2xl self-center">
                 Job Matcher
               </CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 text-center">
+                Note: Matching one resume with multiple job descriptions or multiple resumes with multiple job descriptions may take some time. Please be patient.
+              </p>
+
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -252,13 +256,17 @@ export default function ResumeMatcher() {
                           checked={selectedResumes.includes(resume.resumeId)}
                           onCheckedChange={() => toggleResume(resume.resumeId)}
                         />
-                        <Label
-                          htmlFor={resume.resumeId}
-                          className="text-sm leading-none flex items-center"
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          {resume.filename}
-                        </Label>
+                      <Label
+                        htmlFor={resume.resumeId}
+                        className="text-sm leading-none flex items-center truncate"
+                        title={resume.filename} // Show full name on hover
+                        style={{ maxWidth: 'calc(100% - 40px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
+                        {resume.filename}
+                      </Label>
+
+
                       </div>
                     ))
                   )}
