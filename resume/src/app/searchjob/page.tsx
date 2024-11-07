@@ -29,7 +29,8 @@ import {
   fetchJobs,
   searchJobs,
   setCurrentPage,
-  setReset,
+  setIsSearch,
+  setReset
 } from "../../lib/store/features/job/jobSearch";
 import { AppDispatch, RootState } from "../../lib/store/store";
 
@@ -47,6 +48,7 @@ export default function JobScraper() {
     datePosted,
     currentPage,
     reset,
+    isSearch
   } = useSelector((state: RootState) => state.jobs);
 
   useEffect(() => {
@@ -55,15 +57,15 @@ export default function JobScraper() {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
       dispatch(setReset(false)); // Reset after fetching to prevent re-trigger
       dispatch(setCurrentPage(1));
-
     }
-  }, [dispatch, reset,jobTitle]);
+  }, [dispatch, reset, jobTitle]);
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
 
     try {
       await dispatch(searchJobs()).unwrap();
+      dispatch(setIsSearch(true));
     } catch (error) {
       toast.error("Search Failed ");
       console.log(error);
@@ -73,6 +75,7 @@ export default function JobScraper() {
   const handleClearSearch = () => {
     dispatch(clearSearch());
     dispatch(setReset(true));
+    dispatch(setIsSearch(false))
   };
   const PAGE_LIMIT = 10; // Number of jobs per page
   const MAX_VISIBLE_PAGES = 8; // Max visible page buttons
@@ -108,7 +111,7 @@ export default function JobScraper() {
   const handlePageChange = (page: number) => {
     if (page !== currentPage) {
       dispatch(setCurrentPage(page)); // Update the page in Redux
-      dispatch(fetchJobs({ page, limit: 10 })); // Fetch jobs for the selected page
+      dispatch(fetchJobs({ page: page, limit: 10 })); // Fetch jobs for the next page
     }
   };
 
@@ -270,7 +273,8 @@ export default function JobScraper() {
               </div>
             )}
 
-            {/* Pagination Controls */}
+            {/* Pagination Controls hide if search is true */}
+            {!isSearch &&
             <div className="flex justify-center space-x-4 py-4">
               {/* Previous Button */}
               <Button
@@ -307,7 +311,7 @@ export default function JobScraper() {
               >
                 Next
               </Button>
-            </div>
+            </div>}
           </div>
         </div>
       </div>

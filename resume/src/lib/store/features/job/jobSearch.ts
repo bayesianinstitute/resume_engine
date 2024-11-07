@@ -24,6 +24,7 @@ interface JobsState {
   datePosted: Date ; // Add datePosted to state
   currentPage: number;
   reset: boolean;
+  isSearch: boolean; // New flag for search status
 }
 
 const initialState: JobsState = {
@@ -40,7 +41,8 @@ const initialState: JobsState = {
     return date;
   })(), // Set date to one month ago
   currentPage:1,
-  reset:true
+  reset:true,
+  isSearch:false
 };
 
 export const searchJobs = createAsyncThunk(
@@ -72,6 +74,7 @@ export const searchJobs = createAsyncThunk(
 
     if(!data.success) throw new Error("Failed to search jobs");
     console.log(data.message,data.data);
+
     
     return { joblists: data.data.joblists, totalJoblists: data.data.totalJoblists }; // Adjusted to match your API response
   }
@@ -91,7 +94,8 @@ export const clearSearch = createAsyncThunk(
   }
 );
 
-export const fetchJobs = createAsyncThunk(
+export const 
+fetchJobs = createAsyncThunk(
   "jobs/fetchJobs",
   async ({ page, limit = 10 }: { page: number; limit: number }, {  rejectWithValue }) => {
 
@@ -147,7 +151,7 @@ const jobSlice = createSlice({
       state.datePosted = action.payload;
     },
     setReset(state, action: PayloadAction<boolean>) {
-      state.reset = action.payload; // Directly set reset value
+      state.reset = action.payload; // Directly set reset value for search
     },
     setCurrentPage(state, action: PayloadAction<number>) {
       state.currentPage = action.payload; // Update currentPage when changing pages
@@ -157,6 +161,9 @@ const jobSlice = createSlice({
         state.jobs.push(job);
         state.totalJobs += 1; // Increment totalJobs for each added job
       }
+    },
+    setIsSearch(state, action: PayloadAction<boolean>) {
+      state.isSearch = action.payload;
     },
   },
   
@@ -199,6 +206,6 @@ const jobSlice = createSlice({
   },
 });
 
-export const { setJobTitle, setJobLocation, setDatePosted,setReset,setCurrentPage,addJobb } = jobSlice.actions;
+export const { setJobTitle, setJobLocation, setDatePosted,setReset,setCurrentPage,addJobb,setIsSearch } = jobSlice.actions;
 
 export default jobSlice.reducer;

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Sidebar from "@/components/ui/sidebar";
-import { fetchJobs } from "@/lib/store/features/job/jobSearch";
+import { fetchJobs, setIsSearch } from "@/lib/store/features/job/jobSearch";
 import { fetchResumes } from "@/lib/store/features/resume/resumeSlice";
 import { MatchResult, MatchResultResponse } from "@/types/matcher";
 import { Briefcase, FileText, Link, Upload } from "lucide-react";
@@ -35,7 +35,7 @@ export default function ResumeMatcher() {
   // const [selectAllJobs, setSelectAllJobs] = useState(false);
   const [results, setResults] = useState<MatchResult[]>([]); // State to store matching results
   const { resumes } = useSelector((state: RootState) => state.resume);
-  const { jobs, loading, totalJobs } = useSelector(
+  const { jobs, loading, totalJobs,isSearch } = useSelector(
     (state: RootState) => state.jobs
   );
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,15 +44,16 @@ export default function ResumeMatcher() {
 
   useEffect(() => {
     // Fetch jobs if not already in store
-    if (!jobs.length) {
+    if (!jobs.length || isSearch) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
+      dispatch(setIsSearch(false))
     }
 
     // Fetch resumes if not already in store
     if (!resumes.length && auth.userId) {
       dispatch(fetchResumes(auth.userId));
     }
-  }, [dispatch, jobs.length, auth.userId, resumes.length]);
+  }, [dispatch, jobs.length, auth.userId, resumes.length,isSearch]);
 
   const filteredJobs = jobs.filter((job) => {
     const jobDate = new Date(job.datePosted);

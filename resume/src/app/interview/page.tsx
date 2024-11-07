@@ -29,7 +29,7 @@ import {
   downloadPrepResourcesDocx,
   parsePreparationResources,
 } from "@/lib/fileparse";
-import { fetchJobs } from "@/lib/store/features/job/jobSearch";
+import { fetchJobs, setIsSearch } from "@/lib/store/features/job/jobSearch";
 import { toast } from "react-toastify";
 
 export default function InterviewPreparation() {
@@ -37,7 +37,7 @@ export default function InterviewPreparation() {
   const { jobDescription, prepResources, loading } = useSelector(
     (state: RootState) => state.jobDescription
   );
-  const { jobs, totalJobs } = useSelector((state: RootState) => state.jobs);
+  const { jobs, totalJobs,isSearch } = useSelector((state: RootState) => state.jobs);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const cardRef = useRef<HTMLDivElement | null>(null); 
@@ -109,10 +109,11 @@ export default function InterviewPreparation() {
 
   useEffect(() => {
     // Fetch jobs if not already in store
-    if (!jobs.length) {
+    if (!jobs.length || isSearch) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
+      dispatch(setIsSearch(false));
     }
-  }, [dispatch, jobs.length]);
+  }, [dispatch, jobs.length,isSearch]);
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
