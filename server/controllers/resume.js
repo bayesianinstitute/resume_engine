@@ -1,29 +1,26 @@
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import fs from "fs";
-import os from "os";
+import { ObjectId } from "mongodb";
 import path from "path";
-import { Resume } from "../models/resume.js";
 import { Joblist } from "../models/jobModel.js";
+import { Resume } from "../models/resume.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
-import {  genAI, openai } from "../utils/chatAI.js";
-import { ObjectId } from "mongodb";
+import { genAI, openai } from "../utils/chatAI.js";
 // import { PDFLoader } from 'pdf-loader-library';
 import { fileURLToPath } from "url";
-import { Job } from "../models/jobTracker.js";
-import { JobMatching } from "../models/JobMatching.js"; 
 import { TryCatch } from "../middleware/error.js";
-import ErrorHandler from "../utils/utitlity.js";
+import { Job } from "../models/jobTracker.js";
+import { MatchResult } from "../models/MatchResult.js";
 import { io } from "../socket.js";
-import { MatchResult } from "../models/MatchResult.js"; 
-
+import ErrorHandler from "../utils/utitlity.js";
 
 import { resume_matchschema } from "../models/gemini.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
+async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash-latest",
     generationConfig: {
@@ -61,11 +58,9 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
     }
   `;
 
-
   try {
     const result = await model.generateContent(prompt);
     const response = result.response.text();
-
 
     // const chatSession = genAIModel.startChat({ history: [] });
     // const result = await chatSession.sendMessage(prompt);
@@ -99,8 +94,8 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
       scores: jsonResponse.scores,
       compositeScore: jsonResponse.compositeScore,
       recommendation: jsonResponse.recommendation,
+      isfit: jsonResponse.isfit,
     };
-
   } catch (error) {
     console.error("Error during evaluation:", error.message);
 
@@ -117,8 +112,6 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
     };
   }
 }
-
-
 
 export const matcher = TryCatch(async (req, res, next) => {
   const {
@@ -176,6 +169,8 @@ export const matcher = TryCatch(async (req, res, next) => {
         continue;
       }
 
+      // Get the resume name from resumeEntry
+      const resumeName = resumeEntry.filename || "Untitled Resume"; // Add fallback name
       const resumePath = resumeEntry.resume;
       const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
       const resumeDocs = await pdfLoader.load();
@@ -197,7 +192,9 @@ export const matcher = TryCatch(async (req, res, next) => {
 
         if (existingMatch) {
           const existingJobResult = existingMatch.resumes
-            .find((r) => r.resumeEntryId === resumeEntryId)
+            .find(
+              (r) => r.resumeEntryId.toString() === resumeEntryId.toString()
+            )
             ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
 
           if (existingJobResult) {
@@ -211,7 +208,12 @@ export const matcher = TryCatch(async (req, res, next) => {
           compositeScore,
           scores,
           recommendation,
-        } = await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
+          isfit,
+        } = await getLLMEvaluation(
+          resumeText,
+          jobData.description,
+          fitThreshold
+        );
 
         apiRequestCount++;
 
@@ -225,14 +227,21 @@ export const matcher = TryCatch(async (req, res, next) => {
           jobTitle: jobData.title,
           jobCompany: jobData.company,
           matchResult: resultMessage,
-          compositeScore,
-          scores,
-          recommendation,
+          evaluationResponse: {
+            scores: {
+              relevance: scores.relevance,
+              skills: scores.skills,
+              experience: scores.experience,
+              presentation: scores.presentation,
+            },
+            compositeScore: compositeScore,
+            recommendation: recommendation,
+            isfit: isfit,
+          },
         };
 
         resumeJobResults.push(newJobResult);
 
-        // Emit progress for this specific job result
         if (io) {
           io.emit("progress", {
             resumeEntryId,
@@ -245,47 +254,98 @@ export const matcher = TryCatch(async (req, res, next) => {
         }
       }
 
-      // Save or update the matched results for the resume
-      await MatchResult.findOneAndUpdate(
-        { userId, "resumes.resumeEntryId": resumeEntryId },
-        {
-          $setOnInsert: {
+      try {
+        // Save or update the matched results for the resume
+        const existingMatch = await MatchResult.findOne({
+          userId: userId,
+        });
+
+        if (existingMatch) {
+          const resumeIndex = existingMatch.resumes.findIndex(
+            (resume) =>
+              resume.resumeEntryId.toString() === resumeEntryId.toString()
+          );
+
+          if (resumeIndex >= 0) {
+            // Resume exists, push new jobs to existing resume
+            await MatchResult.findOneAndUpdate(
+              {
+                userId,
+                "resumes.resumeEntryId": resumeEntryId,
+              },
+              {
+                $push: {
+                  "resumes.$.jobs": {
+                    $each: resumeJobResults,
+                  },
+                },
+                $set: {
+                  updatedAt: new Date(),
+                },
+              },
+              { new: true }
+            );
+          } else {
+            // Resume doesn't exist, push new resume with jobs
+            await MatchResult.findOneAndUpdate(
+              { userId },
+              {
+                $push: {
+                  resumes: {
+                    resumeEntryId,
+                    resumeName, // Now we have resumeName from resumeEntry
+                    jobs: resumeJobResults,
+                  },
+                },
+                $set: {
+                  updatedAt: new Date(),
+                },
+              },
+              { new: true }
+            );
+          }
+        } else {
+          // Document doesn't exist, create new document
+          const newMatch = new MatchResult({
+            userId,
+            resumes: [
+              {
+                resumeEntryId,
+                resumeName, // Now we have resumeName from resumeEntry
+                jobs: resumeJobResults,
+              },
+            ],
             createdAt: new Date(),
-          },
-          $push: {
-            "resumes.$[resume].jobs": { $each: resumeJobResults },
-          },
-          $set: {
             updatedAt: new Date(),
-          },
-        },
-        {
-          upsert: true,
-          arrayFilters: [{ "resume.resumeEntryId": resumeEntryId }],
-          new: true,
+          });
+
+          await newMatch.save();
         }
-      );
 
-      // Push overall resume results
-      results.push({ resumeEntryId, jobs: resumeJobResults });
+        // Push overall resume results
+        results.push({ resumeEntryId, jobs: resumeJobResults });
 
-      // Emit progress for the entire resume after all jobs are processed
-      if (io) {
-        io.emit("progress-batch", {
+        if (io) {
+          io.emit("progress-batch", {
+            resumeEntryId,
+            jobs: resumeJobResults,
+          });
+        }
+      } catch (updateError) {
+        console.error("Error updating match results:", updateError);
+        results.push({
           resumeEntryId,
-          jobs: resumeJobResults,
+          error: "Failed to save match results",
+          details: updateError.message,
         });
       }
     }
 
-    // Emit final completion message
     if (io) {
       io.emit("done", {
         message: "Matching process completed.",
         results,
       });
-    } else {
-      console.warn("WebSocket not initialized");
     }
 
     res.json({ message: "Match result", success: true, results });
@@ -294,10 +354,6 @@ export const matcher = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("An error occurred", 500));
   }
 });
-
-
-
-
 
 export const getResumeMatchResults = TryCatch(async (req, res, next) => {
   const { userId, filterByFit } = req.query; // Use query params for filtering
@@ -324,21 +380,28 @@ export const getResumeMatchResults = TryCatch(async (req, res, next) => {
     matchResults.forEach((result) => {
       result.resumes.forEach((resume) => {
         resume.jobs.forEach((job) => {
+          const { evaluationResponse } = job;
+
           // Filter based on fit if provided
           if (
-            (filterByFit === "fit" && job.compositeScore >= 70) ||
-            (filterByFit === "notFit" && job.compositeScore < 70) ||
+            (filterByFit === "fit" && evaluationResponse.isfit) ||
+            (filterByFit === "notFit" && !evaluationResponse.isfit) ||
             !filterByFit ||
             filterByFit === "all"
           ) {
             formattedResults.push({
+              resumeEntryId: resume.resumeEntryId,
               resumeName: resume.resumeName,
               jobTitle: job.jobTitle,
-              company: job.jobCompany,
+              jobCompany: job.jobCompany,
+              jobId: job.jobId,
               matchResult: job.matchResult,
-              compositeScore: job.compositeScore,
-              scores: job.scores,
-              recommendation: job.recommendation,
+              evaluationResponse: {
+                compositeScore: evaluationResponse.compositeScore,
+                scores: evaluationResponse.scores,
+                recommendation: evaluationResponse.recommendation,
+                isfit: evaluationResponse.isfit,
+              },
             });
           }
         });
@@ -355,12 +418,6 @@ export const getResumeMatchResults = TryCatch(async (req, res, next) => {
     next(new ErrorHandler("Failed to fetch results.", 500));
   }
 });
-
-
-
-
-
-
 
 export const stats = TryCatch(async (req, res, next) => {
   const resumeFile = req.file;

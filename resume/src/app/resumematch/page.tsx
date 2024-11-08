@@ -401,7 +401,7 @@ export default function ResumeMatcher() {
           </Card>
 
           {/* Display Matching Results */}
-          <ResumeMatchResults results={results} />
+          <ResumeMatchResults matchresults={results} />
         </div>
       </div>
     </div>

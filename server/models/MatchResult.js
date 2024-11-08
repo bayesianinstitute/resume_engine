@@ -1,4 +1,15 @@
 import mongoose from "mongoose";
+const EvaluationDetailsSchema = new mongoose.Schema({
+  scores: {
+    relevance: { type: Number, required: true },
+    skills: { type: Number, required: true },
+    experience: { type: Number, required: true },
+    presentation: { type: Number, required: true },
+  },
+  compositeScore: { type: Number, required: true },
+  recommendation: { type: String, default: null },
+  isfit: { type: Boolean, required: true },
+});
 
 const matchResultSchema = new mongoose.Schema(
   {
@@ -15,7 +26,7 @@ const matchResultSchema = new mongoose.Schema(
           required: true,
         },
         resumeName: { type: String, required: true },
-        evaluationResponse: { type: String }, // Still at resume level if needed
+        evaluationResponse: { type: String },  // Still at resume level if needed
         jobs: [
           {
             jobId: {
@@ -26,14 +37,7 @@ const matchResultSchema = new mongoose.Schema(
             jobTitle: { type: String, required: true },
             jobCompany: { type: String, required: true },
             matchResult: { type: String, required: true },
-            compositeScore: { type: Number, required: true }, // Job-specific composite score
-            scores: {
-              relevance: { type: Number, required: true },
-              skills: { type: Number, required: true },
-              experience: { type: Number, required: true },
-              presentation: { type: Number, required: true },
-            },
-            recommendation: { type: String }, // Job-specific recommendation
+            evaluationResponse: { type: EvaluationDetailsSchema, required: true },
           },
         ],
       },

@@ -17,7 +17,7 @@ export interface MatchResult {
   jobCompany:string;
   jobId: string;
   matchResult: string;
-  evaluationResponse: string ;
+  evaluationResponse: EvaluationDetails ;
 }
 
 export interface MatchResultResponse {
