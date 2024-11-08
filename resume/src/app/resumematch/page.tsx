@@ -1,4 +1,5 @@
 "use client";
+import {jwtDecode} from "jwt-decode"; 
 
 import { ResumeMatchResults } from "@/components/resume-match-results";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,9 @@ import { toast } from "react-toastify";
 import { AppDispatch, RootState } from "../../lib/store/store";
 import { io } from "socket.io-client"; // Import socket.io-client
 import { useRouter } from "next/navigation";
+
+
+
 
 export default function ResumeMatcher() {
   const dispatch = useDispatch<AppDispatch>();
@@ -123,7 +127,33 @@ export default function ResumeMatcher() {
     );
   };
 
+  // Helper functions for getting and decoding token
+  const getToken = () => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("token") || "";
+    }
+    return ""; // Return an empty string if not in the browser
+  };
+
+  const getUserIdFromToken = () => {
+    const token = getToken();
+    if (token) {
+      try {
+        const decodedToken = jwtDecode<{ userId: string }>(token); // Adjust type if needed
+        return decodedToken?.userId;
+      } catch (error) {
+        console.error("Error decoding token:", error);
+        return null;
+      }
+    }
+    return null;
+  };
   const handleMatch = async () => {
+    const userId = getUserIdFromToken();
+    if (!userId) {
+      toast.error("User not authenticated. Please log in.");
+      return;
+    }
     console.log(selectedJobs);
     const resumeEntryIds = selectedJobs.filter((jobId) =>
       resumes.some((resume) => resume.resumeId === jobId)
@@ -142,7 +172,7 @@ export default function ResumeMatcher() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ resumeEntryIds, jobIds }),
+          body: JSON.stringify({ userId,resumeEntryIds, jobIds }),
         }
       );
 
@@ -163,7 +193,7 @@ export default function ResumeMatcher() {
     const socket = io(process.env.NEXT_PUBLIC_BASE_WS_URL || "http://localhost:5000");
 
     socket.on("progress", (data) => {
-      toast.info(`Progress: ${data.resumeName} -> ${data.jobTitle}`);
+      toast.info(`Progress: ${data.matchResult} -> ${data.jobTitle}`);
     });
 
     socket.on("done", (data) => {

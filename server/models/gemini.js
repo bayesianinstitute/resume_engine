@@ -1,4 +1,4 @@
-import { SchemaType } from "@google/generative-ai";
+import {SchemaType}  from "@google/generative-ai";
 
 // Define schema for resume_matchschema evulation response
 export const resume_matchschema = {

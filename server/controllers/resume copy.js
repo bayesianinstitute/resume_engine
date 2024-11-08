@@ -122,7 +122,7 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold,id) {
 
 export const matcher = TryCatch(async (req, res, next) => {
   const {
-    userId,
+    userId, // Extract userId from req.body
     resumeEntryIds,
     jobIds,
     selectallJob = false,
@@ -159,6 +159,7 @@ export const matcher = TryCatch(async (req, res, next) => {
 
     for (const resumeEntryId of resumeIdsToFetch) {
       const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
+
       if (!resumeData) {
         results.push({ resumeEntryId, error: "Resume entry not found." });
         continue;
@@ -181,29 +182,28 @@ export const matcher = TryCatch(async (req, res, next) => {
       const resumeDocs = await pdfLoader.load();
       const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-      const resumeJobResults = [];
-
       for (const jobData of jobDataArray) {
         if (!jobData || !jobData._id) {
           console.warn("Invalid jobData:", jobData);
           continue;
         }
 
-        const existingMatch = await MatchResult.findOne({
+        const existingResult = await MatchResult.findOne({
           userId,
           "resumes.resumeEntryId": resumeEntryId,
           "resumes.jobs.jobId": jobData._id,
         });
 
-        if (existingMatch) {
-          const existingJobResult = existingMatch.resumes
-            .find((r) => r.resumeEntryId === resumeEntryId)
-            ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
+        if (existingResult) {
+          results.push(existingResult);
+          if (io) io.emit("progress", existingResult);
+          continue;
+        }
 
-          if (existingJobResult) {
-            resumeJobResults.push(existingJobResult);
-            continue; // Skip this job if it's already matched
-          }
+        if (apiRequestCount >= 14) {
+          console.log("Rate limit reached, waiting for 1 minute...");
+          await new Promise((resolve) => setTimeout(resolve, 60000));
+          apiRequestCount = 0;
         }
 
         const {
@@ -225,68 +225,39 @@ export const matcher = TryCatch(async (req, res, next) => {
           jobTitle: jobData.title,
           jobCompany: jobData.company,
           matchResult: resultMessage,
+        };
+
+        const newResumeResult = {
+          resumeEntryId,
+          resumeName: resumeEntry.filename,
           compositeScore,
           scores,
           recommendation,
+          matchResult: resultMessage,
+          evaluationResponse: evaluationText,
+          jobs: [newJobResult],
         };
 
-        resumeJobResults.push(newJobResult);
+        // Ensure the MatchResult document exists for the user
+        await MatchResult.findOneAndUpdate(
+          { userId },
+          { $setOnInsert: { userId, resumes: [] } },
+          { upsert: true }
+        );
 
-        // Emit progress for this specific job result
-        if (io) {
-          io.emit("progress", {
-            resumeEntryId,
-            jobTitle: jobData.title,
-            matchResult: resultMessage,
-            evaluationResponse: evaluationText,
-          });
-        } else {
-          console.warn("WebSocket not initialized");
-        }
-      }
+        // Add the resume and job results
+        await MatchResult.findOneAndUpdate(
+          { userId, "resumes.resumeEntryId": { $ne: resumeEntryId } },
+          { $push: { resumes: newResumeResult } },
+          { new: true }
+        );
 
-      // Save or update the matched results for the resume
-      await MatchResult.findOneAndUpdate(
-        { userId, "resumes.resumeEntryId": resumeEntryId },
-        {
-          $setOnInsert: {
-            createdAt: new Date(),
-          },
-          $push: {
-            "resumes.$[resume].jobs": { $each: resumeJobResults },
-          },
-          $set: {
-            updatedAt: new Date(),
-          },
-        },
-        {
-          upsert: true,
-          arrayFilters: [{ "resume.resumeEntryId": resumeEntryId }],
-          new: true,
-        }
-      );
-
-      // Push overall resume results
-      results.push({ resumeEntryId, jobs: resumeJobResults });
-
-      // Emit progress for the entire resume after all jobs are processed
-      if (io) {
-        io.emit("progress-batch", {
-          resumeEntryId,
-          jobs: resumeJobResults,
-        });
+        results.push(newResumeResult);
+        if (io) io.emit("progress", newResumeResult);
       }
     }
 
-    // Emit final completion message
-    if (io) {
-      io.emit("done", {
-        message: "Matching process completed.",
-        results,
-      });
-    } else {
-      console.warn("WebSocket not initialized");
-    }
+    if (io) io.emit("done", { message: "Matching completed", results });
 
     res.json({ message: "Match result", success: true, results });
   } catch (error) {
@@ -294,68 +265,6 @@ export const matcher = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("An error occurred", 500));
   }
 });
-
-
-
-
-
-export const getResumeMatchResults = TryCatch(async (req, res, next) => {
-  const { userId, filterByFit } = req.query; // Use query params for filtering
-
-  if (!userId) {
-    return next(new ErrorHandler("User ID is required", 400));
-  }
-
-  try {
-    // Fetch match results for the user
-    const matchResults = await MatchResult.find({ userId }).select(
-      "resumes.resumeName resumes.jobs"
-    );
-
-    if (!matchResults || matchResults.length === 0) {
-      return res.status(404).json({
-        message: "No match results found for the user.",
-        success: false,
-      });
-    }
-
-    // Flatten resumes and jobs for frontend, returning all fields in jobs
-    const formattedResults = [];
-    matchResults.forEach((result) => {
-      result.resumes.forEach((resume) => {
-        resume.jobs.forEach((job) => {
-          // Filter based on fit if provided
-          if (
-            (filterByFit === "fit" && job.compositeScore >= 70) ||
-            (filterByFit === "notFit" && job.compositeScore < 70) ||
-            !filterByFit ||
-            filterByFit === "all"
-          ) {
-            formattedResults.push({
-              resumeName: resume.resumeName,
-              jobTitle: job.jobTitle,
-              company: job.jobCompany,
-              matchResult: job.matchResult,
-              compositeScore: job.compositeScore,
-              scores: job.scores,
-              recommendation: job.recommendation,
-            });
-          }
-        });
-      });
-    });
-
-    return res.status(200).json({
-      message: "Resume Match Results fetched successfully.",
-      success: true,
-      results: formattedResults,
-    });
-  } catch (error) {
-    console.error("Error fetching match results:", error);
-    next(new ErrorHandler("Failed to fetch results.", 500));
-  }
-});
-
 
 
 

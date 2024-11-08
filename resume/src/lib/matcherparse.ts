@@ -1,9 +1,12 @@
 import { EvaluationDetails } from "@/types/matcher";
 
-// // Preprocess and clean the evaluationResponse string by removing the ```json syntax
-export const preprocessCleanedEvaluationResponse = (evaluationResponse: string): string => {
-    return evaluationResponse.replace(/^```json\s*|\s*```$/gi, "").trim();
-  };
+// Preprocess and clean the evaluationResponse string by removing the ```json syntax
+export const preprocessCleanedEvaluationResponse = (evaluationResponse: string | undefined): string => {
+  if (!evaluationResponse) {
+    return ""; // Return an empty string if evaluationResponse is undefined or null
+  }
+  return evaluationResponse.replace(/^```json\s*|\s*```$/gi, "").trim();
+};
   
 // Safely parse the cleaned JSON string into EvaluationDetails
 export const safeParseJson = (str: string): EvaluationDetails => {
