@@ -169,8 +169,7 @@ export const matcher = TryCatch(async (req, res, next) => {
         continue;
       }
 
-      // Get the resume name from resumeEntry
-      const resumeName = resumeEntry.filename || "Untitled Resume"; // Add fallback name
+      const resumeName = resumeEntry.filename || "Untitled Resume";
       const resumePath = resumeEntry.resume;
       const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
       const resumeDocs = await pdfLoader.load();
@@ -192,28 +191,17 @@ export const matcher = TryCatch(async (req, res, next) => {
 
         if (existingMatch) {
           const existingJobResult = existingMatch.resumes
-            .find(
-              (r) => r.resumeEntryId.toString() === resumeEntryId.toString()
-            )
+            .find((r) => r.resumeEntryId.toString() === resumeEntryId.toString())
             ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
 
           if (existingJobResult) {
             resumeJobResults.push(existingJobResult);
-            continue; // Skip this job if it's already matched
+            continue;
           }
         }
 
-        const {
-          evaluationText,
-          compositeScore,
-          scores,
-          recommendation,
-          isfit,
-        } = await getLLMEvaluation(
-          resumeText,
-          jobData.description,
-          fitThreshold
-        );
+        const { evaluationText, compositeScore, scores, recommendation, isfit } =
+          await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
 
         apiRequestCount++;
 
@@ -223,20 +211,17 @@ export const matcher = TryCatch(async (req, res, next) => {
             : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`;
 
         const newJobResult = {
+          resumeEntryId,
+          resumeName,
           jobId: jobData._id,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
           matchResult: resultMessage,
           evaluationResponse: {
-            scores: {
-              relevance: scores.relevance,
-              skills: scores.skills,
-              experience: scores.experience,
-              presentation: scores.presentation,
-            },
-            compositeScore: compositeScore,
-            recommendation: recommendation,
-            isfit: isfit,
+            scores,
+            compositeScore,
+            recommendation,
+            isfit,
           },
         };
 
@@ -244,10 +229,24 @@ export const matcher = TryCatch(async (req, res, next) => {
 
         if (io) {
           io.emit("progress", {
-            resumeEntryId,
-            jobTitle: jobData.title,
-            matchResult: resultMessage,
-            evaluationResponse: evaluationText,
+            success: true,
+            message: `Progress: ${newJobResult.jobTitle} -> ${newJobResult.matchResult} `,
+            results: [
+              {
+                resumeEntryId,
+                resumeName,
+                jobId: jobData._id,
+                jobTitle: jobData.title,
+                jobCompany: jobData.company,
+                matchResult: resultMessage,
+                evaluationResponse: {
+                  scores,
+                  compositeScore,
+                  recommendation,
+                  isfit,
+                },
+              },
+            ],
           });
         } else {
           console.warn("WebSocket not initialized");
@@ -255,80 +254,28 @@ export const matcher = TryCatch(async (req, res, next) => {
       }
 
       try {
-        // Save or update the matched results for the resume
-        const existingMatch = await MatchResult.findOne({
-          userId: userId,
-        });
-
-        if (existingMatch) {
-          const resumeIndex = existingMatch.resumes.findIndex(
-            (resume) =>
-              resume.resumeEntryId.toString() === resumeEntryId.toString()
-          );
-
-          if (resumeIndex >= 0) {
-            // Resume exists, push new jobs to existing resume
-            await MatchResult.findOneAndUpdate(
-              {
-                userId,
-                "resumes.resumeEntryId": resumeEntryId,
-              },
-              {
-                $push: {
-                  "resumes.$.jobs": {
-                    $each: resumeJobResults,
-                  },
-                },
-                $set: {
-                  updatedAt: new Date(),
-                },
-              },
-              { new: true }
-            );
-          } else {
-            // Resume doesn't exist, push new resume with jobs
-            await MatchResult.findOneAndUpdate(
-              { userId },
-              {
-                $push: {
-                  resumes: {
-                    resumeEntryId,
-                    resumeName, // Now we have resumeName from resumeEntry
-                    jobs: resumeJobResults,
-                  },
-                },
-                $set: {
-                  updatedAt: new Date(),
-                },
-              },
-              { new: true }
-            );
-          }
-        } else {
-          // Document doesn't exist, create new document
-          const newMatch = new MatchResult({
-            userId,
-            resumes: [
-              {
+        await MatchResult.updateOne(
+          { userId },
+          {
+            $push: {
+              resumes: {
                 resumeEntryId,
-                resumeName, // Now we have resumeName from resumeEntry
+                resumeName,
                 jobs: resumeJobResults,
               },
-            ],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
+            },
+            $set: { updatedAt: new Date() },
+          },
+          { upsert: true }
+        );
 
-          await newMatch.save();
-        }
-
-        // Push overall resume results
-        results.push({ resumeEntryId, jobs: resumeJobResults });
+        results.push(resumeJobResults);
 
         if (io) {
           io.emit("progress-batch", {
-            resumeEntryId,
-            jobs: resumeJobResults,
+            success: true,
+            message: "Completed ",
+            results: resumeJobResults,
           });
         }
       } catch (updateError) {
@@ -348,12 +295,13 @@ export const matcher = TryCatch(async (req, res, next) => {
       });
     }
 
-    res.json({ message: "Match result", success: true, results });
+    res.json({ message: "Match result", success: true, results:results[0] });
   } catch (error) {
     console.error("Error processing resume match:", error);
     return next(new ErrorHandler("An error occurred", 500));
   }
 });
+
 
 export const getResumeMatchResults = TryCatch(async (req, res, next) => {
   const { userId, filterByFit } = req.query; // Use query params for filtering

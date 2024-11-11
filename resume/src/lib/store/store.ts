@@ -3,6 +3,7 @@ import jobDescriptionReducer from './features/job/jobSlice'
 import jobReducer from "./features/job/jobSearch";
 import authReducer from "./features/user/user";
 import resumeReducer from './features/resume/resumeSlice';
+import jobMatchReducer from './features/resume/matchSlice';
 
 export const makeStore = () => {
   return configureStore({
@@ -18,6 +19,9 @@ export const makeStore = () => {
       // Job Slice
       jobDescription: jobDescriptionReducer,
       jobs: jobReducer,
+
+      // Match Slice
+      jobMatch: jobMatchReducer,
 
     }
   })

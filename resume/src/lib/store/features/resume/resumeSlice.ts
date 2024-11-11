@@ -29,7 +29,6 @@ export const fetchResumes = createAsyncThunk<ResumeApiResponse, string>(
 
         throw new Error(errorData.message || "Failed to fetch resumes");
       }
-      console.log(response)
       return await response.json();
     } catch (error: unknown) {
       if (error instanceof Error) {

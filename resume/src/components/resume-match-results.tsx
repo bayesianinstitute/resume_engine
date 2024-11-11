@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -13,6 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { selectMatchResults, setMatchResults } from "@/lib/store/features/resume/matchSlice";
+import { MatchResult, MatchResultResponse } from "@/types/matcher";
+import { Label } from "@radix-ui/react-label";
 import {
   ColumnDef,
   flexRender,
@@ -23,18 +25,21 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { jwtDecode } from "jwt-decode";
-import { MatchResult, MatchResultResponse } from "@/types/matcher";
 import { Download, RefreshCcw, Search } from "lucide-react";
-import { Select, SelectContent, SelectItem } from "./ui/select";
-import { Label } from "@radix-ui/react-label";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem } from "./ui/select";
 
-interface ResumeMatchResultsProps {
-  matchresults: MatchResult[];
-}
+import { AppDispatch } from "@/lib/store/store";
+import { useDispatch } from "react-redux";
 
-export function ResumeMatchResults({ matchresults }: ResumeMatchResultsProps) {
-  const [results, setResults] = useState<MatchResult[]>(matchresults);
+
+
+export function ResumeMatchResults() {
+  const dispatch = useDispatch<AppDispatch>();
+  const matchResults = useSelector(selectMatchResults);
+  const [results, setResults] = useState<MatchResult[]>(matchResults);
   const [expandedRows, setExpandedRows] = useState<number[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -42,6 +47,11 @@ export function ResumeMatchResults({ matchresults }: ResumeMatchResultsProps) {
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:5000";
+  
+    useEffect(() => {
+      // Sync local results with Redux store
+      setResults(matchResults);
+    }, [matchResults]);
 
   const getToken = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -87,6 +97,7 @@ export function ResumeMatchResults({ matchresults }: ResumeMatchResultsProps) {
 
       if (data.success) {
         setResults(data.results);
+        dispatch(setMatchResults(data.results));
       } else {
         console.error("Failed to fetch results:", data.message);
       }
@@ -95,7 +106,7 @@ export function ResumeMatchResults({ matchresults }: ResumeMatchResultsProps) {
     } finally {
       setIsLoading(false); // Reset loading state
     }
-  }, [API_BASE_URL, getUserIdFromToken]); // Only changes if API_BASE_URL changes
+  }, [API_BASE_URL, getUserIdFromToken,dispatch]); // Only changes if API_BASE_URL changes
 
   useEffect(() => {
     fetchResults(); // Initial fetch on component mount

@@ -1,5 +1,5 @@
 "use client";
-import {jwtDecode} from "jwt-decode"; 
+import { jwtDecode } from "jwt-decode";
 
 import { ResumeMatchResults } from "@/components/resume-match-results";
 import { Button } from "@/components/ui/button";
@@ -16,28 +16,29 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Sidebar from "@/components/ui/sidebar";
 import { fetchJobs, setIsSearch } from "@/lib/store/features/job/jobSearch";
+import {
+  fetchMatchResults,
+  updateMatchResultProgress,
+} from "@/lib/store/features/resume/matchSlice";
 import { fetchResumes } from "@/lib/store/features/resume/resumeSlice";
-import { MatchResult, MatchResultResponse } from "@/types/matcher";
+import { MatchResultResponse } from "@/types/matcher";
 import { Briefcase, FileText, Link, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
+import { io } from "socket.io-client";
 import { AppDispatch, RootState } from "../../lib/store/store";
-import { io } from "socket.io-client"; // Import socket.io-client
-import { useRouter } from "next/navigation";
-
-
-
 
 export default function ResumeMatcher() {
   const dispatch = useDispatch<AppDispatch>();
   const [timeFilter, setTimeFilter] = useState("week");
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectAllJobs, setSelectAllJobs] = useState(false);
-  const [results, setResults] = useState<MatchResult[]>([]);
   const { resumes } = useSelector((state: RootState) => state.resume);
-  const { jobs, loading, totalJobs,isSearch } = useSelector(
+  const { error } = useSelector((state: RootState) => state.jobMatch);
+  const { jobs, loading, totalJobs, isSearch } = useSelector(
     (state: RootState) => state.jobs
   );
   const [currentPage, setCurrentPage] = useState(1);
@@ -47,13 +48,13 @@ export default function ResumeMatcher() {
   useEffect(() => {
     if (!jobs.length || isSearch) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
-      dispatch(setIsSearch(false))
+      dispatch(setIsSearch(false));
     }
 
     if (!resumes.length && auth.userId) {
       dispatch(fetchResumes(auth.userId));
     }
-  }, [dispatch, jobs.length, auth.userId, resumes.length,isSearch]);
+  }, [dispatch, jobs.length, auth.userId, resumes.length, isSearch]);
 
   const filteredJobs = jobs.filter((job) => {
     const jobDate = new Date(job.datePosted);
@@ -90,27 +91,35 @@ export default function ResumeMatcher() {
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
       const resumeIds = resumes.map((resume) => resume.resumeId);
+      // Only select resumes, leave job selections untouched
       setSelectedJobs((prevSelected) => [
-        ...prevSelected.filter((id) =>
-          filteredJobs.some((job) => job._id === id)
-        ),
+        ...prevSelected.filter((id) => filteredJobs.some((job) => job._id === id)),
         ...resumeIds,
       ]);
     } else {
+      // Deselect all resumes without affecting job selections
       setSelectedJobs((prevSelected) =>
-        prevSelected.filter((id) =>
-          filteredJobs.some((job) => job._id === id)
-        )
+        prevSelected.filter((id) => filteredJobs.some((job) => job._id === id))
       );
     }
   };
-
+  
   const toggleSelectAllJobs = (checked: boolean) => {
     setSelectAllJobs(checked);
-    setSelectedJobs(checked ? filteredJobs.map((job) => job._id) : []);
+    if (checked) {
+      // Select all jobs but leave resumes untouched
+      setSelectedJobs((prevSelected) => [
+        ...prevSelected.filter((id) => resumes.some((resume) => resume.resumeId === id)),
+        ...filteredJobs.map((job) => job._id),
+      ]);
+    } else {
+      // Deselect all jobs but leave resumes untouched
+      setSelectedJobs((prevSelected) =>
+        prevSelected.filter((id) => resumes.some((resume) => resume.resumeId === id))
+      );
+    }
   };
-
-
+  
   const toggleResume = (resumeId: string) => {
     setSelectedJobs((prev) =>
       prev.includes(resumeId)
@@ -154,7 +163,7 @@ export default function ResumeMatcher() {
       toast.error("User not authenticated. Please log in.");
       return;
     }
-    console.log(selectedJobs);
+
     const resumeEntryIds = selectedJobs.filter((jobId) =>
       resumes.some((resume) => resume.resumeId === jobId)
     );
@@ -162,38 +171,33 @@ export default function ResumeMatcher() {
       filteredJobs.some((job) => job._id === jobId)
     );
 
-    toast.info(`Sent Job Matcher Request`);
+    toast.info("Job Match requested sent");
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/resume/matcher`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ userId,resumeEntryIds, jobIds }),
-        }
-      );
-
-      const data: MatchResultResponse = await response.json();
-      if (data.success) {
-        toast.success(data.message);
-        setResults(data.results);
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error) {
-      console.error("Error matching resumes:", error);
+      await dispatch(fetchMatchResults({ userId, resumeEntryIds, jobIds }));
+      toast.success("Match result");
+    } catch (e) {
+      toast.error(error);
+      console.error(e);
     }
   };
 
   // WebSocket setup for real-time updates
   useEffect(() => {
-    const socket = io(process.env.NEXT_PUBLIC_BASE_WS_URL || "http://localhost:5000");
+    const socket = io(
+      process.env.NEXT_PUBLIC_BASE_WS_URL || "http://localhost:5000"
+    );
 
-    socket.on("progress", (data) => {
-      toast.info(`Progress: ${data.matchResult} -> ${data.jobTitle}`);
+    socket.on("progress", (data: MatchResultResponse) => {
+      // Dispatch to update match result progress in Redux store
+      if (!data.success) {
+        toast.warning(data.message);
+        return;
+      }
+      dispatch(updateMatchResultProgress(data.results));
+
+      // Optionally show a toast notification for progress
+      toast.info(data.message);
     });
 
     socket.on("done", (data) => {
@@ -205,7 +209,7 @@ export default function ResumeMatcher() {
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [dispatch]);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -401,7 +405,7 @@ export default function ResumeMatcher() {
           </Card>
 
           {/* Display Matching Results */}
-          <ResumeMatchResults matchresults={results} />
+          <ResumeMatchResults />
         </div>
       </div>
     </div>
