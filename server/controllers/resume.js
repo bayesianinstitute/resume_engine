@@ -218,6 +218,7 @@ export const matcher = TryCatch(async (req, res, next) => {
             : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`;
 
         const newJobResult = {
+          resumeName: resumeName,
           jobId: jobData._id,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
