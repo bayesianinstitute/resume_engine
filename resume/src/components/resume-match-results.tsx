@@ -34,8 +34,6 @@ import { Select, SelectContent, SelectItem } from "./ui/select";
 import { AppDispatch } from "@/lib/store/store";
 import { useDispatch } from "react-redux";
 
-
-
 export function ResumeMatchResults() {
   const dispatch = useDispatch<AppDispatch>();
   const matchResults = useSelector(selectMatchResults);
@@ -43,15 +41,16 @@ export function ResumeMatchResults() {
   const [expandedRows, setExpandedRows] = useState<number[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [filterByFit, setFilterByFit] = useState<string>(""); // New filter state
   const [isLoading, setIsLoading] = useState(false); // New state for loading indicator
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:5000";
-  
-    useEffect(() => {
-      // Sync local results with Redux store
-      setResults(matchResults);
-    }, [matchResults]);
+
+  useEffect(() => {
+    // Sync local results with Redux store
+    setResults(matchResults);
+  }, [matchResults]);
 
   const getToken = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -106,11 +105,20 @@ export function ResumeMatchResults() {
     } finally {
       setIsLoading(false); // Reset loading state
     }
-  }, [API_BASE_URL, getUserIdFromToken,dispatch]); // Only changes if API_BASE_URL changes
+  }, [API_BASE_URL, getUserIdFromToken, dispatch]); // Only changes if API_BASE_URL changes
 
   useEffect(() => {
     fetchResults(); // Initial fetch on component mount
   }, [fetchResults]);
+
+  const filteredResults = useMemo(() => {
+    if (filterByFit === "good fit") {
+      return results.filter((result) => !result.evaluationResponse.isfit);
+    } else if (filterByFit === "not a fit") {
+      return results.filter((result) => result.evaluationResponse.isfit);
+    }
+    return results;
+  }, [results, filterByFit]);
 
   const columns: ColumnDef<MatchResult>[] = useMemo(
     () => [
@@ -176,7 +184,7 @@ export function ResumeMatchResults() {
   );
 
   const table = useReactTable({
-    data: results,
+    data: filteredResults, // Apply filter results here
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -213,15 +221,9 @@ export function ResumeMatchResults() {
     const csvContent = table.getFilteredRowModel().rows.map((row) => {
       const result = row.original;
       const cleanMatchResult = result.matchResult;
-      console.log(cleanMatchResult)
-
-      // Safely parse evaluationResponse
-
-      // Clean the string by removing the backticks before parsing it
 
       const evaluation = result.evaluationResponse;
 
-      // Safely extract scores
       const scores = evaluation.scores || {
         relevance: 0,
         skills: 0,
@@ -229,13 +231,12 @@ export function ResumeMatchResults() {
         presentation: 0,
       };
 
-      // Prepare CSV row values
       const csvRow = [
         result.resumeName || "",
         result.jobTitle || "",
         result.jobCompany || "",
         evaluation.isfit || false,
-        cleanMatchResult ? cleanMatchResult.replace(/,/g, ";") : "", // Replace commas to avoid CSV parsing issues
+        cleanMatchResult ? cleanMatchResult.replace(/,/g, ";") : "",
         evaluation.compositeScore || "",
         scores.relevance || "",
         scores.skills || "",
@@ -243,10 +244,9 @@ export function ResumeMatchResults() {
         scores.presentation || "",
         evaluation.recommendation
           ? evaluation.recommendation.replace(/,/g, ";")
-          : "", // Replace commas
+          : "",
       ];
 
-      // Escape double quotes and join with comma
       return csvRow
         .map((field) =>
           typeof field === "string" ? `"${field.replace(/"/g, '""')}"` : field
@@ -273,12 +273,12 @@ export function ResumeMatchResults() {
     <Card className="w-full max-w-4xl mx-auto mt-10">
       <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0">
         <CardTitle>Resume Match Results</CardTitle>
-        <div className=" ml-auto">
+        <div className="ml-auto">
           <Button onClick={fetchResults} variant="outline" disabled={isLoading}>
             <RefreshCcw className="mr-2 h-4 w-4" />
             {isLoading ? "Loading..." : "Refresh Results"}
           </Button>
-          <Button onClick={downloadCSV} className=" ml-5">
+          <Button onClick={downloadCSV} className="ml-5">
             <Download className="mr-2 h-4 w-4" />
             Download CSV
           </Button>
@@ -299,14 +299,13 @@ export function ResumeMatchResults() {
             <div className="flex items-center space-x-2">
               <Label htmlFor="fitFilter">Filter by fit:</Label>
               <Select
-                onValueChange={(value) =>
-                  table.getColumn("matchResult")?.setFilterValue(value)
-                }
+                onValueChange={(value) => setFilterByFit(value)}
+                defaultValue=""
               >
                 <SelectContent>
                   <SelectItem value="">All</SelectItem>
-                  <SelectItem value="good fit">Good Fit</SelectItem>
-                  <SelectItem value="not a perfect fit">Not Fit</SelectItem>
+                  <SelectItem value="good fit">Not a Fit</SelectItem>
+                  <SelectItem value="not a fit">Good Fit</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -329,63 +328,16 @@ export function ResumeMatchResults() {
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows.map((row) => (
-                  <>
-                    <TableRow key={row.id}>
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                    {expandedRows.includes(row.index) && (
-                      <TableRow>
-                        <TableCell colSpan={columns.length}>
-                          <div className="p-4 bg-gray-50">
-                            <h4 className="font-semibold mb-2">
-                              Evaluation Details
-                            </h4>
-                            {(() => {
-                              const result = row.original.evaluationResponse;
-
-                              return (
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <p>
-                                      <strong>Relevance:</strong>{" "}
-                                      {result.scores.relevance}%
-                                    </p>
-                                    <p>
-                                      <strong>Skills:</strong>{" "}
-                                      {result.scores.skills}%
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p>
-                                      <strong>Experience:</strong>{" "}
-                                      {result.scores.experience}%
-                                    </p>
-                                    <p>
-                                      <strong>Presentation:</strong>{" "}
-                                      {result.scores.presentation}%
-                                    </p>
-                                  </div>
-                                  <div className="col-span-2">
-                                    <p>
-                                      <strong>Recommendation:</strong>{" "}
-                                      {result.recommendation}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </>
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
