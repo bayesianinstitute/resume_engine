@@ -195,11 +195,18 @@ export const matcher = TryCatch(async (req, res, next) => {
             ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
 
           if (existingJobResult) {
-            resumeJobResults.push(existingJobResult);
-            continue;
+            if (io) {
+              io.emit("progress", {
+                success: true,
+                message: `Match for job '${jobData.title}' and resume '${resumeName}' already exists in the database.`,
+                results: existingJobResult,
+              });
+            }
+            continue; // Skip LLM evaluation for existing match
           }
         }
 
+        // Call LLM only if no match is found
         const { evaluationText, compositeScore, scores, recommendation, isfit } =
           await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
 
@@ -211,8 +218,6 @@ export const matcher = TryCatch(async (req, res, next) => {
             : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`;
 
         const newJobResult = {
-          resumeEntryId,
-          resumeName,
           jobId: jobData._id,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
@@ -230,61 +235,49 @@ export const matcher = TryCatch(async (req, res, next) => {
         if (io) {
           io.emit("progress", {
             success: true,
-            message: `Progress: ${newJobResult.jobTitle} -> ${newJobResult.matchResult} `,
-            results: [
-              {
-                resumeEntryId,
-                resumeName,
-                jobId: jobData._id,
-                jobTitle: jobData.title,
-                jobCompany: jobData.company,
-                matchResult: resultMessage,
-                evaluationResponse: {
-                  scores,
-                  compositeScore,
-                  recommendation,
-                  isfit,
-                },
-              },
-            ],
+            message: `Progress: ${newJobResult.jobTitle} -> ${newJobResult.matchResult}`,
+            results: [newJobResult],
           });
-        } else {
-          console.warn("WebSocket not initialized");
         }
       }
 
-      try {
-        await MatchResult.updateOne(
-          { userId },
+      if (resumeJobResults.length > 0) {
+        const matchResult = await MatchResult.findOneAndUpdate(
+          { userId, "resumes.resumeEntryId": resumeEntryId },
           {
-            $push: {
-              resumes: {
-                resumeEntryId,
-                resumeName,
-                jobs: resumeJobResults,
-              },
-            },
+            $push: { "resumes.$.jobs": { $each: resumeJobResults } },
             $set: { updatedAt: new Date() },
           },
-          { upsert: true }
+          { new: true }
         );
+
+        if (!matchResult) {
+          // If the resume entry doesn't exist in MatchResult, create it.
+          await MatchResult.updateOne(
+            { userId },
+            {
+              $push: {
+                resumes: {
+                  resumeEntryId,
+                  resumeName,
+                  jobs: resumeJobResults,
+                },
+              },
+              $set: { updatedAt: new Date() },
+            },
+            { upsert: true }
+          );
+        }
 
         results.push(resumeJobResults);
 
         if (io) {
           io.emit("progress-batch", {
             success: true,
-            message: "Completed ",
+            message: "Completed new matches",
             results: resumeJobResults,
           });
         }
-      } catch (updateError) {
-        console.error("Error updating match results:", updateError);
-        results.push({
-          resumeEntryId,
-          error: "Failed to save match results",
-          details: updateError.message,
-        });
       }
     }
 
@@ -295,12 +288,14 @@ export const matcher = TryCatch(async (req, res, next) => {
       });
     }
 
-    res.json({ message: "Match result", success: true, results:results[0] });
+    res.json({ message: "Match result", success: true, results: results[0] });
   } catch (error) {
     console.error("Error processing resume match:", error);
     return next(new ErrorHandler("An error occurred", 500));
   }
 });
+
+
 
 
 export const getResumeMatchResults = TryCatch(async (req, res, next) => {
