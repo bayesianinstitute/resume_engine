@@ -53,8 +53,8 @@ export const addJob = TryCatch(async (req, res, next) => {
 });
 
 export const scrapJob = TryCatch(async (req, res, next) => {
-  const { title, location, hours, include_description = true, max_result_wanted } = req.body;
-  console.log(title, location, hours, include_description, max_result_wanted);
+  const { title, location, hours, include_description = true, max_result_wanted,country_code } = req.body;
+  // console.log(title, location, hours, include_description, max_result_wanted);
 
   // Check for required parameters
   if (!title || !location || !hours) {
@@ -63,8 +63,13 @@ export const scrapJob = TryCatch(async (req, res, next) => {
     );
   }
 
-  const country = await fetchCountryByCity(location);
+  let countryCode = country_code
+  if (!country_code ){
 
+    countryCode = await fetchCountryByCity(location);
+  }
+
+  console.log("country fetch ",country_code)
   try {
     // Call the FastAPI job scraping endpoint
     const response = await axios.get(FASTAPI_URL, {
@@ -73,7 +78,7 @@ export const scrapJob = TryCatch(async (req, res, next) => {
         location,
         hours,
         include_description,
-        country,
+        country:countryCode,
         max_result_wanted
       },
     });

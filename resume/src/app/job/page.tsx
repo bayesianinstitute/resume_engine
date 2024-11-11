@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { dateOptions, experienceOptions } from "@/constant/dropdata";
 import { useEffect, useState } from "react";
 
-import { AddJobApi, AddJobForm, AutoJob, AutoJobApi, Feature } from "@/types/job";
+import { AddJobApi, AddJobForm, AutoJob, AutoJobApi, Feature, searchlocationFeature,  } from "@/types/job";
 import { toast } from "react-toastify";
 
 import { Loader2 } from "lucide-react";
@@ -43,15 +43,18 @@ export default function JobTabs() {
   const [autoJobData, setAutoJobData] = useState<AutoJob>({
     title: "",
     location: "",
+    country_code:"",
     datePosted: 24,
     max_result_wanted: 20,
   });
+  
 
   const [isLocationLoading, setIsLocationLoading] = useState(true);
 
-  const [suggestions, setSuggestions] = useState([]);
+  const [suggestions, setSuggestions] = useState<searchlocationFeature[]>([]);
 
   const handleLocationChange = async (e:React.ChangeEvent<HTMLInputElement>) => {
+    
     const value = e.target.value;
     setFormData((prev) => ({ ...prev, location: value }));
     setAutoJobData((prev) => ({ ...prev, location: value }));
@@ -62,7 +65,7 @@ export default function JobTabs() {
           `https://api.geoapify.com/v1/geocode/autocomplete?text=${value}&apiKey=${process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY}`
         );
         const data = await response.json();
-        setSuggestions(data.features.map((feature:Feature) => feature.properties.city));
+        setSuggestions(data.features.map((feature:Feature) => feature.properties));
       } catch (error) {
         console.error("Error fetching suggestions:", error);
       }
@@ -71,9 +74,9 @@ export default function JobTabs() {
     }
   };
 
-  const handleSuggestionClick = (suggestion:string) => {
-    setFormData((prev) => ({ ...prev, location: suggestion }));
-    setAutoJobData((prev) => ({ ...prev, location: suggestion }));
+  const handleSuggestionClick = (suggestion:searchlocationFeature) => {
+    setFormData((prev) => ({ ...prev, location: suggestion.city,country_code:suggestion.country_code }));
+    setAutoJobData((prev) => ({ ...prev, location: suggestion.city,country_code:suggestion.country_code }));
     setSuggestions([]); // Clear suggestions after selection
   };
 
@@ -183,12 +186,17 @@ export default function JobTabs() {
   };
 
   const autofetchJobs = async () => {
-    const { title, location, datePosted, max_result_wanted } = autoJobData;
-    if (!title || !location || !datePosted) {
-      toast.warning(
-        "Please provide all required parameters for auto job scraping"
-      );
-      return;
+    const { title, location, datePosted, max_result_wanted,country_code } = autoJobData;
+    const requiredFields = [
+      { field: title, name: "job title" },
+      { field: location, name: "location" },
+    ];
+
+    for (const { field, name } of requiredFields) {
+      if (!field) {
+        toast.warning(`Please provide the ${name}`);
+        return;
+      }
     }
     toast("Requesting auto job");
 
@@ -205,6 +213,7 @@ export default function JobTabs() {
             location,
             hours: datePosted,
             max_result_wanted,
+            country_code: country_code,
           }),
         }
       );
@@ -290,7 +299,7 @@ export default function JobTabs() {
                               onClick={() => handleSuggestionClick(suggestion)}
                               className="px-4 py-2 hover:bg-gray-200 cursor-pointer"
                             >
-                              {suggestion}
+                              {suggestion.formatted}
                             </div>
                           ))}
                         </div>
@@ -405,7 +414,7 @@ export default function JobTabs() {
                               onClick={() => handleSuggestionClick(suggestion)}
                               className="px-4 py-2 hover:bg-gray-200 cursor-pointer"
                             >
-                              {suggestion}
+                              {suggestion.formatted}
                             </div>
                           ))}
                         </div>
