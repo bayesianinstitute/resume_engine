@@ -280,3 +280,55 @@ export const logout = (req, res) => {
   });
 };
 
+
+
+export const getProfile = TryCatch(async (req, res, next) => {
+  const userId = req.user?.id || req.query.userId; // Assuming `req.user` is populated by middleware
+  
+  if (!userId) {
+    return next(new ErrorHandler("User ID is required", 400));
+  }
+
+  const user = await User.findById(userId).select("-password"); // Exclude the password field
+
+  if (!user) {
+    return next(new ErrorHandler("User not found", 404));
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "User profile fetched successfully",
+    data: user,
+  });
+});
+
+
+export const updateProfile = TryCatch(async (req, res, next) => {
+  const userId = req.user?.id || req.query.userId; // Assuming `req.user` is populated by middleware
+  
+  if (!userId) {
+    return next(new ErrorHandler("User ID is required", 400));
+  }
+
+  const { firstname, phone } = req.body;
+
+  if (!firstname || !phone) {
+    return next(new ErrorHandler("All fields (firstname, phone) are required", 400));
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { firstname, phone },
+    { new: true, runValidators: true } // Return updated document and run field validation
+  ).select("-password");
+
+  if (!updatedUser) {
+    return next(new ErrorHandler("User not found", 404));
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Profile updated successfully",
+    data: updatedUser,
+  });
+});

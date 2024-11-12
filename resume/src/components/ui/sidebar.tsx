@@ -108,6 +108,17 @@ const Sidebar = () => {
             <Upload className="w-5 h-5" />
             <span>Upload Resume</span>
           </Link>
+          <Link
+            href="/profile"
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+              pathname === "/profile"
+                ? "text-white bg-gray-700"
+                : "text-gray-300 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            <Upload className="w-5 h-5" />
+            <span>Profile</span>
+          </Link>
         </div>
         {/*
           <Link
