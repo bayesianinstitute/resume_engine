@@ -21,7 +21,7 @@ interface JobsState {
   error: string | null;
   jobTitle: string; // Add jobTitle to state
   jobLocation: string; // Add jobLocation to state
-  datePosted: Date ; // Add datePosted to state
+  datePosted: string;
   currentPage: number;
   reset: boolean;
   isSearch: boolean; // New flag for search status
@@ -35,11 +35,7 @@ const initialState: JobsState = {
   error: null,
   jobTitle: '', // Initialize as empty string
   jobLocation: '', // Initialize as empty string
-  datePosted: (function() {
-    const date = new Date();
-    date.setMonth(date.getMonth() - 1); // Subtract one month
-    return date;
-  })(), // Set date to one month ago
+  datePosted: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(),
   currentPage:1,
   reset:true,
   isSearch:false
@@ -50,12 +46,14 @@ export const searchJobs = createAsyncThunk(
   async (_, { getState }) => {
     const state = getState() as RootState;
     const { jobTitle, jobLocation, datePosted } = state.jobs; // Destructure from state
+
+    const date=datePosted ? datePosted.toString() : null
     
     // Prepare the search parameters for the request body
     const searchParams = {
       title: jobTitle,
       location: jobLocation || null,
-      datePosted: datePosted.toISOString() ,
+      datePosted: date ,
     };
 
     // Send the search parameters in the request body
@@ -86,11 +84,7 @@ export const clearSearch = createAsyncThunk(
   async (_, { dispatch }) => {
     dispatch(setJobTitle(''));
     dispatch(setJobLocation(''));
-    dispatch(setDatePosted((function() {
-      const date = new Date();
-      date.setMonth(date.getMonth() - 1); // Subtract one month
-      return date;
-    })()));
+    dispatch(setDatePosted(new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString())); // One month ago as an ISO string
   }
 );
 
@@ -147,7 +141,7 @@ const jobSlice = createSlice({
     setJobLocation(state, action: PayloadAction<string>) {
       state.jobLocation = action.payload;
     },
-    setDatePosted(state, action: PayloadAction<Date>) {
+    setDatePosted(state, action: PayloadAction<string>) {
       state.datePosted = action.payload;
     },
     setReset(state, action: PayloadAction<boolean>) {

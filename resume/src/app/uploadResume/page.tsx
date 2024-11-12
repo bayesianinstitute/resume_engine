@@ -28,7 +28,7 @@ import {
   fetchResumes,
   setLoading,
   setResumes,
-  setSelectedResume
+  setSelectedResume,
 } from "@/lib/store/features/resume/resumeSlice";
 import { AppDispatch, RootState } from "@/lib/store/store";
 import { Resume, ResumeApiResponse } from "@/types/resume";
@@ -37,17 +37,19 @@ import { toast } from "react-toastify";
 
 import { resumeSteps } from "@/constant/tourdata";
 import Tour from "@/components/Tour";
+import { setToken } from "@/lib/store/features/user/user";
+import { useRouter } from "next/navigation";
 
 export default function ResumeViewer() {
   const [files, setFiles] = useState<File[]>([]);
   const [open, setOpen] = useState(false);
-
-  
+  const router = useRouter();
+  const [resumeToDelete, setResumeToDelete] = useState<Resume | null>(null);
 
   const dispatch = useDispatch<AppDispatch>();
   const auth = useSelector((state: RootState) => state.auth);
 
-  const { resumes, selectedResume,  loading } = useSelector(
+  const { resumes, selectedResume, loading } = useSelector(
     (state: RootState) => state.resume
   );
 
@@ -55,10 +57,16 @@ export default function ResumeViewer() {
     if (auth.userId && auth.token) {
       dispatch(fetchResumes(auth.userId));
     } else {
-
-      console.error("Token is missing");
+      const token = localStorage.getItem("token");
+      if (token) {
+        dispatch(setToken(token));
+      } else {
+        console.error("Token is missing");
+        // Show login modal
+        router.push("/login");
+      }
     }
-  }, [auth.userId, auth.token, dispatch]);
+  }, [auth.userId, auth.token, dispatch, router]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -84,11 +92,11 @@ export default function ResumeViewer() {
     event.preventDefault();
 
     if (files.length === 0) {
-      toast.warning(`Please upload a resume select`)
+      toast.warning(`Please upload a resume select`);
       // dispatch(setErrorMessage("Please upload a resume."));
       return;
     }
-    
+
     const formData = new FormData();
     formData.append("resume", files[0]);
     formData.append("userId", auth.userId!);
@@ -112,6 +120,8 @@ export default function ResumeViewer() {
         toast.success(result.message);
         dispatch(setResumes(result.data.resumes));
         setFiles([]);
+        const fileInput = document.getElementById("file") as HTMLInputElement;
+        if (fileInput) fileInput.value = ""; // Clear the input element
       } else {
         toast.error(result.message);
       }
@@ -137,9 +147,15 @@ export default function ResumeViewer() {
     }
   };
 
-  const handleDeleteResume = async (resume: Resume) => {
+  const handleDeleteResume = async (Resume: Resume) => {
     try {
       const userId = auth.userId;
+      const resume=Resume.resume
+      
+      if (!userId || !resume) {
+        console.error("User ID or Resume ID is missing");
+        return;
+      }
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/resume/`,
         {
@@ -148,7 +164,7 @@ export default function ResumeViewer() {
             Authorization: `Bearer ${auth.token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ userId, resume: resume.resume }),
+          body: JSON.stringify({ userId, resume }),
         }
       );
       const result: ResumeApiResponse = await response.json();
@@ -158,12 +174,9 @@ export default function ResumeViewer() {
       } else {
         toast.error(result.message);
       }
-
-      // await fetchAllResumes();
     } catch (error) {
       console.error("Error:", error);
       toast.error("An error occurred while deleting the resume.");
-      // dispatch(setErrorMessage());
     }
   };
 
@@ -183,9 +196,9 @@ export default function ResumeViewer() {
             </CardTitle>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mx-auto max-w-5xl">
               {resumes.length > 0 ? (
-                resumes.map((resume, index) => (
+                resumes.map((resume) => (
                   <Card
-                    key={index}
+                    key={resume._id}
                     className="cursor-pointer shadow-lg rounded-lg p-4 hover:shadow-xl transition-transform duration-200 relative"
                   >
                     <Dialog open={open} onOpenChange={setOpen}>
@@ -195,11 +208,14 @@ export default function ResumeViewer() {
                             <TooltipTrigger asChild>
                               <XCircle
                                 className="delete-button w-6 h-6 text-gray-500 absolute top-2 right-2 cursor-pointer hover:text-red-500"
-                                onClick={() => setOpen(true)}
+                                onClick={() => {
+                                  setResumeToDelete(resume); // Set the selected resume ID
+                                  setOpen(true);
+                                }}
                               />
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p >Delete Resume</p>
+                              <p>Delete Resume</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -208,7 +224,7 @@ export default function ResumeViewer() {
                         <DialogHeader>
                           <DialogTitle>Delete Resume</DialogTitle>
                           <DialogDescription>
-                            Are you sure you want to delete this resume? This
+                            Are you sure you want to delete {resumeToDelete?.filename} file? This
                             action cannot be undone.
                           </DialogDescription>
                         </DialogHeader>
@@ -224,8 +240,11 @@ export default function ResumeViewer() {
                             type="button"
                             variant="destructive"
                             onClick={async () => {
-                              await handleDeleteResume(resume);
-                              setOpen(false); // Close the dialog after deletion
+                              if (resumeToDelete) {
+                                await handleDeleteResume(resumeToDelete); // Pass the specific resume ID
+                                setResumeToDelete(null); // Reset after deletion
+                                setOpen(false); // Close the dialog
+                              }
                             }}
                           >
                             Delete
@@ -233,10 +252,11 @@ export default function ResumeViewer() {
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
-                    <TooltipProvider >
+                    <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <CardContent className="analyze-button"
+                          <CardContent
+                            className="analyze-button"
                             onClick={() => dispatch(setSelectedResume(resume))}
                           >
                             <CardTitle className="text-lg font-bold text-gray-800 mt-4 mr-4">
@@ -256,7 +276,7 @@ export default function ResumeViewer() {
                   </Card>
                 ))
               ) : (
-                  <Datanotfound msg="No Resume Found" />
+                <Datanotfound msg="No Resume Found" />
               )}
             </div>
 

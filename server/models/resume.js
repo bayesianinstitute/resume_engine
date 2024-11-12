@@ -9,11 +9,11 @@ const resumeSchema = new mongoose.Schema({
   resumes: [
     {
       resume: {
-        type: String, // Store PDF data as a Buffer
+        type: String, // File Path
         required: true,
       },
       filename:{
-        type:String,
+        type:String, // file name
         required: true,
       },
       strengths: [

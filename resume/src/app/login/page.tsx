@@ -44,10 +44,9 @@ export default function LoginPage() {
       if (!data.success) {
         toast.error(data.message || 'Failed to login. Please try again.')
       } else {
-        // Store the token in localStorage
         dispatch(setToken(data.data.token))
-        localStorage.setItem('token', data.data.token) // Save token
-        toast.success(data.message)
+        console.log(data.message)
+        toast.success(data.message || "Login in ")
         
         // Redirect to the resume page or dashboard
         router.push('/uploadResume') 

@@ -37,7 +37,7 @@ export default function ResumeMatcher() {
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectAllJobs, setSelectAllJobs] = useState(false);
   const { resumes } = useSelector((state: RootState) => state.resume);
-  const { error } = useSelector((state: RootState) => state.jobMatch);
+  const { error:jobMatchError,loading:jobMatchLoading } = useSelector((state: RootState) => state.jobMatch);
   const { jobs, loading, totalJobs, isSearch } = useSelector(
     (state: RootState) => state.jobs
   );
@@ -177,10 +177,16 @@ export default function ResumeMatcher() {
       await dispatch(fetchMatchResults({ userId, resumeEntryIds, jobIds }));
       toast.success("Match result");
     } catch (e) {
-      toast.error(error);
+      toast.error(jobMatchError);
       console.error(e);
     }
   };
+
+  useEffect(() => {
+    if (jobMatchError) {
+      toast.error(jobMatchError);
+    }
+  }, [jobMatchError]);
 
   // WebSocket setup for real-time updates
   useEffect(() => {
@@ -400,7 +406,7 @@ export default function ResumeMatcher() {
               </div>
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Button onClick={handleMatch}>Match</Button>
+              <Button onClick={handleMatch} disabled={jobMatchLoading}>{loading ? "Loading..." : "Match"}</Button>
             </CardFooter>
           </Card>
 

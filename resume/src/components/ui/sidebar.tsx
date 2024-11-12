@@ -6,7 +6,8 @@ import {
   LogOut,
   PlusCircle,
   Search,
-  Upload
+  Upload,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -17,21 +18,21 @@ import "react-toastify/dist/ReactToastify.css";
 const Sidebar = () => {
   const pathname = usePathname(); // usePathname instead of useRouter
   const dispatch = useDispatch<AppDispatch>();
-  const router = useRouter()
+  const router = useRouter();
   const onLogout = async () => {
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/user/logout`,
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to log out");
-      }
-      const data = await response.json();
-      console.log(data.message);
+      // const response = await fetch(
+      //   `${process.env.NEXT_PUBLIC_BASE_URL}/user/logout`,
+      //   {
+      //     method: "GET",
+      //     credentials: "include",
+      //   }
+      // );
+      // if (!response.ok) {
+      //   throw new Error("Failed to log out");
+      // }
+      // const data = await response.json();
+      // console.log(data.message);
       dispatch(clearToken());
       toast.success("Logged out successfully");
       router.push("/login");
@@ -108,17 +109,6 @@ const Sidebar = () => {
             <Upload className="w-5 h-5" />
             <span>Upload Resume</span>
           </Link>
-          <Link
-            href="/profile"
-            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
-              pathname === "/profile"
-                ? "text-white bg-gray-700"
-                : "text-gray-300 hover:text-white hover:bg-gray-800"
-            }`}
-          >
-            <Upload className="w-5 h-5" />
-            <span>Profile</span>
-          </Link>
         </div>
         {/*
           <Link
@@ -143,6 +133,18 @@ const Sidebar = () => {
             <span>Job Tracker</span>
           </Link> 
           */}
+
+        <Link
+          href="/profile"
+          className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
+            pathname === "/profile"
+              ? "text-white bg-gray-700"
+              : "text-gray-300 hover:text-white hover:bg-gray-800"
+          }`}
+        >
+          <User className="w-5 h-5" />
+          <span>Profile</span>
+        </Link>
 
         <button
           onClick={onLogout}

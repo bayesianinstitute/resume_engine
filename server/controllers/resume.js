@@ -6,7 +6,7 @@ import { Joblist } from "../models/jobModel.js";
 import { Resume } from "../models/resume.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
-import { genAI, openai } from "../utils/chatAI.js";
+import { genAI, genAIModel, openai } from "../utils/chatAI.js";
 // import { PDFLoader } from 'pdf-loader-library';
 import { fileURLToPath } from "url";
 import { TryCatch } from "../middleware/error.js";
@@ -429,7 +429,7 @@ export const stats = TryCatch(async (req, res, next) => {
       success: true,
       message: "Resume Upload and analysis data successfully!",
       data: resumeRecord,
-      resumeId: resumeRecord._id.toString(), // Send resume _id in response
+      // resumeId: resumeRecord._id.toString(), // Send resume _id in response
     });
   } catch (error) {
     console.error("Error processing resume:", error);
@@ -498,13 +498,13 @@ export const getAllResumes = TryCatch(async (req, res, next) => {
 
     // Format the resumes data for response
     const resumes = resumeData.resumes.map((resume, index) => ({
-      resumeId: resume._id.toString(), // Send resume id as collection id from db
+      _id: resume._id.toString(), // Send resume id as collection id from db
+      resume: resume.resume, // Include the path to the resume PDF
       filename: resume.filename, // Include the file name for response
       strengths: resume.strengths.map((s) => s.point), // Extract points for response
       weaknesses: resume.weaknesses.map((w) => w.point), // Extract points for response
       skills: resume.skills,
       uploadedAt: resume.uploadedAt,
-      resume: resume.resume, // Include the path to the resume PDF
     }));
 
     res.status(200).json({
@@ -522,6 +522,7 @@ export const getAllResumes = TryCatch(async (req, res, next) => {
 
 export const deleteResume = TryCatch(async (req, res, next) => {
   const { userId, resume } = req.body;
+  // return next(new ErrorHandler("User ID and file name are required.", 400));
 
   if (!userId || !resume) {
     return next(new ErrorHandler("User ID and file name are required.", 400));
@@ -529,8 +530,9 @@ export const deleteResume = TryCatch(async (req, res, next) => {
 
   try {
     // Define the base directory for resume uploads
-    const relativeUploadsDir = "uploads";
     const resumeFilePath = resume;
+    
+    console.log("Resuming upload",resumeFilePath);
 
     // Check if the file exists and delete it from the server
     if (fs.existsSync(resumeFilePath)) {

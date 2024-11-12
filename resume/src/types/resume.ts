@@ -1,5 +1,5 @@
 export interface Resume {
-  resumeId: string;
+  _id: string;
   resume: string;
   filename: string;
   strengths: { point: string }[];
@@ -23,5 +23,4 @@ export interface defaultResponse{
 
 export interface ResumeApiResponse extends defaultResponse {
   data: ResumeApi;
-  resumeId:string;
 }

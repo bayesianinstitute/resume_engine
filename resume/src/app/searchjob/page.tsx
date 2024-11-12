@@ -30,9 +30,10 @@ import {
   searchJobs,
   setCurrentPage,
   setIsSearch,
-  setReset
+  setReset,
 } from "../../lib/store/features/job/jobSearch";
 import { AppDispatch, RootState } from "../../lib/store/store";
+import { disableNextDays } from "@/lib/utils";
 
 const JobCard = lazy(() => import("@/components/ui/jobCard"));
 
@@ -48,7 +49,7 @@ export default function JobScraper() {
     datePosted,
     currentPage,
     reset,
-    isSearch
+    isSearch,
   } = useSelector((state: RootState) => state.jobs);
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function JobScraper() {
   const handleClearSearch = () => {
     dispatch(clearSearch());
     dispatch(setReset(true));
-    dispatch(setIsSearch(false))
+    dispatch(setIsSearch(false));
   };
   const PAGE_LIMIT = 10; // Number of jobs per page
   const MAX_VISIBLE_PAGES = 8; // Max visible page buttons
@@ -197,13 +198,18 @@ export default function JobScraper() {
                         <PopoverContent className="w-auto p-0">
                           <Calendar
                             mode="single"
-                            selected={datePosted}
+                            selected={
+                              typeof datePosted === "string"
+                                ? new Date(datePosted)
+                                : datePosted
+                            }
                             onSelect={(date) =>
                               dispatch({
                                 type: "jobs/setDatePosted",
                                 payload: date,
                               })
                             }
+                            disabled={disableNextDays}
                             initialFocus
                           />
                         </PopoverContent>
@@ -274,44 +280,45 @@ export default function JobScraper() {
             )}
 
             {/* Pagination Controls hide if search is true */}
-            {!isSearch &&
-            <div className="flex justify-center space-x-4 py-4">
-              {/* Previous Button */}
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentPage === 1}
-                className="px-4 text-blue-600"
-              >
-                Previous
-              </Button>
-
-              {/* Page Buttons */}
-              {calculatePageRange(currentPage).map((page) => (
+            {!isSearch && (
+              <div className="flex justify-center space-x-4 py-4">
+                {/* Previous Button */}
                 <Button
-                  key={page}
                   variant="outline"
-                  onClick={() => handlePageChange(page)}
-                  className={`px-4 py-2 rounded-md transition duration-200 ${
-                    currentPage === page
-                      ? "bg-blue-600 text-white" // Active button color
-                      : "bg-white text-blue-600 hover:bg-blue-100" // Inactive button color
-                  }`}
+                  onClick={handlePrevious}
+                  disabled={currentPage === 1}
+                  className="px-4 text-blue-600"
                 >
-                  {page}
+                  Previous
                 </Button>
-              ))}
 
-              {/* Next Button */}
-              <Button
-                variant="outline"
-                onClick={handleNext}
-                disabled={currentPage === totalPages}
-                className="px-4 text-blue-600"
-              >
-                Next
-              </Button>
-            </div>}
+                {/* Page Buttons */}
+                {calculatePageRange(currentPage).map((page) => (
+                  <Button
+                    key={page}
+                    variant="outline"
+                    onClick={() => handlePageChange(page)}
+                    className={`px-4 py-2 rounded-md transition duration-200 ${
+                      currentPage === page
+                        ? "bg-blue-600 text-white" // Active button color
+                        : "bg-white text-blue-600 hover:bg-blue-100" // Inactive button color
+                    }`}
+                  >
+                    {page}
+                  </Button>
+                ))}
+
+                {/* Next Button */}
+                <Button
+                  variant="outline"
+                  onClick={handleNext}
+                  disabled={currentPage === totalPages}
+                  className="px-4 text-blue-600"
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
