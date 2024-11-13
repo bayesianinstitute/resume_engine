@@ -204,13 +204,13 @@ export default function InterviewPreparation() {
                   <Download className="mr-2 h-4 w-4" />
                   Download PDF File
                 </Button>
-                <Button
+                {/* <Button
                   onClick={() => downloadPrepResourcesDocx(prepResources)}
                   variant="outline"
                 >
                   <Download className="mr-2 h-4 w-4" />
                   Download DOCX File
-                </Button>
+                </Button> */}
               </>
             )}
           </AnimatePresence>
