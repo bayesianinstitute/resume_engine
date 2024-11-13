@@ -16,8 +16,7 @@ interface CustomJwtPayload {
 export default function ProfileDashboard() {
   const [profile, setProfile] = useState({
     email: "",
-    firstname: "",
-    lastname: "",
+    name: "",
     phone: "",
   });
   const [loading, setLoading] = useState(false);
@@ -154,8 +153,8 @@ export default function ProfileDashboard() {
               <Input id="email" type="email" value={profile.email} disabled />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="firstname">Name</Label>
-              <Input id="firstname" value={profile.firstname} onChange={handleChange} />
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" value={profile.name} onChange={handleChange} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>

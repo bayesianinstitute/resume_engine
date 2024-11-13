@@ -28,7 +28,7 @@ export default function SignupPage() {
       return
     }
 
-    const [firstname, lastname = ''] = name.split(' ')
+   
     setIsLoading(true)
 
     try {
@@ -38,8 +38,7 @@ export default function SignupPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          firstname,
-          lastname,
+          name,
           email,
           password,
           phone,

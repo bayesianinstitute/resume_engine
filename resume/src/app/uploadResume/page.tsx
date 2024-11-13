@@ -259,7 +259,7 @@ export default function ResumeViewer() {
                             className="analyze-button"
                             onClick={() => dispatch(setSelectedResume(resume))}
                           >
-                            <CardTitle className="text-lg font-bold text-gray-800 mt-4 mr-4">
+                            <CardTitle className="text-lg font-bold text-gray-800 mt-4 mr-4 truncate">
                               {resume.filename}
                             </CardTitle>
                             <p className="text-gray-500 text-sm mt-2">
@@ -314,7 +314,7 @@ export default function ResumeViewer() {
                     id="file"
                     type="file"
                     onChange={onFileChange}
-                    accept="image/*,video/*,audio/*,.pdf"
+                    accept=".pdf"
                   />
                   {files.length > 0 && (
                     <div className="text-sm text-gray-500 mt-2">

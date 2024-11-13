@@ -1,4 +1,4 @@
-import { PendingUser, User,Contact } from "../models/user.js";
+import { PendingUser, User } from "../models/user.js";
 import { TryCatch } from "../middleware/error.js";
 import ErrorHandler from "../utils/utitlity.js";
 import { generateToken } from "../middleware/auth.js";
@@ -40,7 +40,7 @@ export const Login = async (req, res, next) => {
     })
     .json({
       success: true,
-      message: `Welcome ${user.firstname}`,
+      message: `Welcome ${user.name}`,
       data: { token: token, user: user },
     });
 };
@@ -66,10 +66,10 @@ export const getUser = TryCatch(async (req, res, next) => {
 });
 
 export const completeUser = TryCatch(async (req, res, next) => {
-  const { firstname, lastname, password, phone, email } = req.body;
+  const { name, password, phone, email } = req.body;
   
   // Find pending user by verification token
-  if (!firstname || !lastname || !phone || !email || !password) {
+  if (!name || !phone || !email || !password) {
     return next(new ErrorHandler("Please give all required parameters", 400));
   }
 
@@ -81,8 +81,7 @@ export const completeUser = TryCatch(async (req, res, next) => {
   const hashedPassword = await bcrypt.hash(password, 10);
   // Create actual user from pending user data
   const user = new User({
-    firstname: firstname,
-    lastname: lastname,
+    name: name,
     email: email.toLowerCase(),
     password: hashedPassword,
     phone: phone,
@@ -189,31 +188,31 @@ export const ResetPassword = TryCatch(async (req, res, next) => {
     });
 });
 
-export const contact = TryCatch(async (req, res, next) => {
-  const { name, email, message } = req.body;
+// export const contact = TryCatch(async (req, res, next) => {
+//   const { name, email, message } = req.body;
 
-  // Validate required fields
-  if (!name || !email || !message) {
-    return next(new ErrorHandler('All fields are required: name, email, message', 400));
-  }
+//   // Validate required fields
+//   if (!name || !email || !message) {
+//     return next(new ErrorHandler('All fields are required: name, email, message', 400));
+//   }
 
-  // Create a new contact entry
-  const newContact = new Contact({
-    name,
-    email,
-    message
-  });
+//   // Create a new contact entry
+//   const newContact = new Contact({
+//     name,
+//     email,
+//     message
+//   });
 
-  // Save contact data to the database
-  await newContact.save();
+//   // Save contact data to the database
+//   await newContact.save();
 
-  // Send response back to client
-  res.status(201).json({
-    success: true,
-    message: 'Contact information saved successfully!',
-    data: newContact
-  });
-});
+//   // Send response back to client
+//   res.status(201).json({
+//     success: true,
+//     message: 'Contact information saved successfully!',
+//     data: newContact
+//   });
+// });
 
 export const updateKeywords = TryCatch(async (req, res, next) => {
   const { email, keywords } = req.body;
@@ -310,15 +309,15 @@ export const updateProfile = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("User ID is required", 400));
   }
 
-  const { firstname, phone } = req.body;
+  const { name, phone } = req.body;
 
-  if (!firstname || !phone) {
-    return next(new ErrorHandler("All fields (firstname, phone) are required", 400));
+  if (!name || !phone) {
+    return next(new ErrorHandler("All fields (name, phone) are required", 400));
   }
 
   const updatedUser = await User.findByIdAndUpdate(
     userId,
-    { firstname, phone },
+    { name, phone },
     { new: true, runValidators: true } // Return updated document and run field validation
   ).select("-password");
 
