@@ -29,7 +29,7 @@ app.use(morgan("dev"));
 app.use(cors({ origin: true, credentials: true }));
 
 // Static files
-app.use("/uploads", express.static(path.resolve("uploads")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Initialize cache
 export const myCache = new NodeCache();
