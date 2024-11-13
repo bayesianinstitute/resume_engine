@@ -35,7 +35,7 @@ export default function ResumeMatcher() {
   const dispatch = useDispatch<AppDispatch>();
   const [timeFilter, setTimeFilter] = useState("week");
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
-  const [selectAllJobs, setSelectAllJobs] = useState(false);
+  // const [selectAllJobs, setSelectAllJobs] = useState(false);
   const { resumes } = useSelector((state: RootState) => state.resume);
   const { error: jobMatchError, loading: jobMatchLoading } = useSelector(
     (state: RootState) => state.jobMatch
@@ -91,57 +91,64 @@ export default function ResumeMatcher() {
     rootMargin: "0px 0px 400px 0px",
   });
 
-  const toggleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const resumeIds = resumes.map((resume) => resume._id);
-      // Only select resumes, leave job selections untouched
-      setSelectedJobs((prevSelected) => [
-        ...prevSelected.filter((id) =>
-          filteredJobs.some((job) => job._id === id)
-        ),
-        ...resumeIds,
-      ]);
-    } else {
-      // Deselect all resumes without affecting job selections
-      setSelectedJobs((prevSelected) =>
-        prevSelected.filter((id) => filteredJobs.some((job) => job._id === id))
-      );
-    }
-  };
+  // const toggleSelectAll = (checked: boolean) => {
+  //   if (checked) {
+  //     const resumeIds = resumes.map((resume) => resume._id);
+  //     // Only select resumes, leave job selections untouched
+  //     setSelectedJobs((prevSelected) => [
+  //       ...prevSelected.filter((id) =>
+  //         filteredJobs.some((job) => job._id === id)
+  //       ),
+  //       ...resumeIds,
+  //     ]);
+  //   } else {
+  //     // Deselect all resumes without affecting job selections
+  //     setSelectedJobs((prevSelected) =>
+  //       prevSelected.filter((id) => filteredJobs.some((job) => job._id === id))
+  //     );
+  //   }
+  // };
 
-  const toggleSelectAllJobs = (checked: boolean) => {
-    setSelectAllJobs(checked);
-    if (checked) {
-      // Select all jobs but leave resumes untouched
-      setSelectedJobs((prevSelected) => [
-        ...prevSelected.filter((id) =>
-          resumes.some((resume) => resume._id === id)
-        ),
-        ...filteredJobs.map((job) => job._id),
-      ]);
-    } else {
-      // Deselect all jobs but leave resumes untouched
-      setSelectedJobs((prevSelected) =>
-        prevSelected.filter((id) => resumes.some((resume) => resume._id === id))
-      );
-    }
-  };
+  // const toggleSelectAllJobs = (checked: boolean) => {
+  //   setSelectAllJobs(checked);
+  //   if (checked) {
+  //     // Select all jobs but leave resumes untouched
+  //     setSelectedJobs((prevSelected) => [
+  //       ...prevSelected.filter((id) =>
+  //         resumes.some((resume) => resume._id === id)
+  //       ),
+  //       ...filteredJobs.map((job) => job._id),
+  //     ]);
+  //   } else {
+  //     // Deselect all jobs but leave resumes untouched
+  //     setSelectedJobs((prevSelected) =>
+  //       prevSelected.filter((id) => resumes.some((resume) => resume._id === id))
+  //     );
+  //   }
+  // };
 
   const toggleResume = (resumeId: string) => {
-    setSelectedJobs((prev) =>
-      prev.includes(resumeId)
-        ? prev.filter((id) => id !== resumeId)
-        : [...prev, resumeId]
-    );
+    setSelectedJobs((prev) => {
+      const isAlreadySelected = prev.includes(resumeId);
+      const selectedJobIds = prev.filter((id) =>
+        filteredJobs.some((job) => job._id === id)
+      );
+  
+      return isAlreadySelected ? [] : [resumeId, ...selectedJobIds];
+    });
   };
-
+  
   const toggleJob = (jobId: string) => {
-    setSelectedJobs((prev) =>
-      prev.includes(jobId)
-        ? prev.filter((id) => id !== jobId)
-        : [...prev, jobId]
-    );
+    setSelectedJobs((prev) => {
+      const isAlreadySelected = prev.includes(jobId);
+      const selectedResumeIds = prev.filter((id) =>
+        resumes.some((resume) => resume._id === id)
+      );
+  
+      return isAlreadySelected ? [] : [jobId, ...selectedResumeIds];
+    });
   };
+  
 
   // Helper functions for getting and decoding token
   const getToken = () => {
@@ -252,7 +259,7 @@ export default function ResumeMatcher() {
               {/* Resumes Section */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  <Checkbox
+                  {/* <Checkbox
                     id="selectAll"
                     checked={
                       resumes.length > 0 &&
@@ -261,7 +268,7 @@ export default function ResumeMatcher() {
                       )
                     }
                     onCheckedChange={toggleSelectAll}
-                  />
+                  /> */}
                   <Label
                     htmlFor="selectAll"
                     className="text-sm font-medium leading-none"
@@ -350,11 +357,11 @@ export default function ResumeMatcher() {
                     Job Opportunities
                   </Label>
                   <div className="flex items-center space-x-2">
-                    <Checkbox
+                    {/* <Checkbox
                       id="selectAllJobs"
                       checked={selectAllJobs}
                       onCheckedChange={toggleSelectAllJobs}
-                    />
+                    /> */}
                     <Label
                       htmlFor="selectAllJobs"
                       className="text-sm font-medium"

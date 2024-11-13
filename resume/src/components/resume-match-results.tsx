@@ -335,7 +335,6 @@ export function ResumeMatchResults() {
                           cell.column.columnDef.cell,
                           cell.getContext()
                         )}
-                  console.log(row.id)
 
                       </TableCell>
                     ))}
