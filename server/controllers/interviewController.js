@@ -36,7 +36,7 @@ ${jobDescription}
     const result = await model.generateContent(prompt);
     const response = result.response.text();
 
-    res.json({data: response,message:"Successfully Generated Interview Question",success: true});
+    res.json({data: response,message:"Successfully generated interview preparation resources",success: true});
   } catch (error) {
     console.error("Error generating interview preparation resources:", error);
     return next(new ErrorHandler("An error occurred while generating interview preparation resources.",500))

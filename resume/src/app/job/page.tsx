@@ -22,7 +22,7 @@ import { useState } from "react";
 import { AddJobApi, AddJobForm, Feature, searchlocationFeature } from "@/types/job";
 import { toast } from "react-toastify";
 
-import { Loader2 } from "lucide-react";
+// import { Loader2 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/lib/store/store";
 import { addJobb } from "@/lib/store/features/job/jobSearch";
@@ -39,7 +39,7 @@ export default function JobTabs() {
     company: "",
   });
 
-  const [isLocationLoading, setIsLocationLoading] = useState(true);
+  // const [isLocationLoading, setIsLocationLoading] = useState(true);
 
   const [suggestions, setSuggestions] = useState<searchlocationFeature[]>([]);
 

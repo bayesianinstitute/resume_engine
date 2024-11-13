@@ -37,7 +37,9 @@ export default function ResumeMatcher() {
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectAllJobs, setSelectAllJobs] = useState(false);
   const { resumes } = useSelector((state: RootState) => state.resume);
-  const { error:jobMatchError,loading:jobMatchLoading } = useSelector((state: RootState) => state.jobMatch);
+  const { error: jobMatchError, loading: jobMatchLoading } = useSelector(
+    (state: RootState) => state.jobMatch
+  );
   const { jobs, loading, totalJobs, isSearch } = useSelector(
     (state: RootState) => state.jobs
   );
@@ -55,6 +57,7 @@ export default function ResumeMatcher() {
       dispatch(fetchResumes(auth.userId));
     }
   }, [dispatch, jobs.length, auth.userId, resumes.length, isSearch]);
+  
 
   const filteredJobs = jobs.filter((job) => {
     const jobDate = new Date(job.datePosted);
@@ -90,10 +93,12 @@ export default function ResumeMatcher() {
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
-      const resumeIds = resumes.map((resume) => resume.resumeId);
+      const resumeIds = resumes.map((resume) => resume._id);
       // Only select resumes, leave job selections untouched
       setSelectedJobs((prevSelected) => [
-        ...prevSelected.filter((id) => filteredJobs.some((job) => job._id === id)),
+        ...prevSelected.filter((id) =>
+          filteredJobs.some((job) => job._id === id)
+        ),
         ...resumeIds,
       ]);
     } else {
@@ -103,23 +108,25 @@ export default function ResumeMatcher() {
       );
     }
   };
-  
+
   const toggleSelectAllJobs = (checked: boolean) => {
     setSelectAllJobs(checked);
     if (checked) {
       // Select all jobs but leave resumes untouched
       setSelectedJobs((prevSelected) => [
-        ...prevSelected.filter((id) => resumes.some((resume) => resume.resumeId === id)),
+        ...prevSelected.filter((id) =>
+          resumes.some((resume) => resume._id === id)
+        ),
         ...filteredJobs.map((job) => job._id),
       ]);
     } else {
       // Deselect all jobs but leave resumes untouched
       setSelectedJobs((prevSelected) =>
-        prevSelected.filter((id) => resumes.some((resume) => resume.resumeId === id))
+        prevSelected.filter((id) => resumes.some((resume) => resume._id === id))
       );
     }
   };
-  
+
   const toggleResume = (resumeId: string) => {
     setSelectedJobs((prev) =>
       prev.includes(resumeId)
@@ -165,7 +172,7 @@ export default function ResumeMatcher() {
     }
 
     const resumeEntryIds = selectedJobs.filter((jobId) =>
-      resumes.some((resume) => resume.resumeId === jobId)
+      resumes.some((resume) => resume._id === jobId)
     );
     const jobIds = selectedJobs.filter((jobId) =>
       filteredJobs.some((job) => job._id === jobId)
@@ -250,7 +257,7 @@ export default function ResumeMatcher() {
                     checked={
                       resumes.length > 0 &&
                       resumes.every((resume) =>
-                        selectedJobs.includes(resume.resumeId)
+                        selectedJobs.includes(resume._id)
                       )
                     }
                     onCheckedChange={toggleSelectAll}
@@ -280,21 +287,22 @@ export default function ResumeMatcher() {
                   ) : (
                     resumes.map((resume) => (
                       <div
-                        key={resume.resumeId}
+                        key={resume._id}
                         className="flex items-center space-x-2"
                       >
                         <Checkbox
-                          id={resume.resumeId}
-                          checked={selectedJobs.includes(resume.resumeId)}
-                          onCheckedChange={() => toggleResume(resume.resumeId)}
+                          id={resume._id}
+                          checked={selectedJobs.includes(resume._id)}
+                          onCheckedChange={() => toggleResume(resume._id)}
                         />
                         {/* <Checkbox
-                          id={resume.resumeId}
-                          checked={selectedResumes.includes(resume.resumeId)}
-                          onCheckedChange={() => toggleResume(resume.resumeId)}
+                          id={resume._id}
+                          checked={selectedResumes.includes(resume._id)}
+                          onCheckedChange={() => toggleResume(resume._id)}
                         /> */}
+
                         <Label
-                          htmlFor={resume.resumeId}
+                          htmlFor={resume._id}
                           className="text-sm leading-none flex items-center truncate"
                           title={resume.filename}
                           style={{
@@ -406,7 +414,9 @@ export default function ResumeMatcher() {
               </div>
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Button onClick={handleMatch} disabled={jobMatchLoading}>{loading ? "Loading..." : "Match"}</Button>
+              <Button onClick={handleMatch} disabled={jobMatchLoading}>
+                {loading ? "Loading..." : "Match"}
+              </Button>
             </CardFooter>
           </Card>
 
