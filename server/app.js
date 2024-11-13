@@ -10,6 +10,7 @@ import resumeRouter from "./routes/resume.js";
 import jobRouter from "./routes/jobRoutes.js";
 import { initSocket } from "./socket.js";
 import http from "http";
+import path from "path";
 
 dotenv.config(); // Load environment variables
 
@@ -28,7 +29,7 @@ app.use(morgan("dev"));
 app.use(cors({ origin: true, credentials: true }));
 
 // Static files
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.resolve("uploads")));
 
 // Initialize cache
 export const myCache = new NodeCache();
