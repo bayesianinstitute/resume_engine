@@ -179,6 +179,7 @@ export function ResumeMatchResults() {
           );
         },
       },
+      
     ],
     [expandedRows]
   );
@@ -202,6 +203,7 @@ export function ResumeMatchResults() {
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
     );
   };
+  
 
   const downloadCSV = () => {
     const headers = [
@@ -328,17 +330,63 @@ export function ResumeMatchResults() {
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
+                  <>
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {expandedRows.includes(row.index) && (
+                      <TableRow>
+                        <TableCell colSpan={columns.length}>
+                          <div className="p-4 bg-gray-50">
+                            <h4 className="font-semibold mb-2">
+                              Evaluation Details
+                            </h4>
+                            {(() => {
+                              const result = row.original.evaluationResponse;
 
-                      </TableCell>
-                    ))}
-                  </TableRow>
+                              return (
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p>
+                                      <strong>Relevance:</strong>{" "}
+                                      {result.scores.relevance}%
+                                    </p>
+                                    <p>
+                                      <strong>Skills:</strong>{" "}
+                                      {result.scores.skills}%
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p>
+                                      <strong>Experience:</strong>{" "}
+                                      {result.scores.experience}%
+                                    </p>
+                                    <p>
+                                      <strong>Presentation:</strong>{" "}
+                                      {result.scores.presentation}%
+                                    </p>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <p>
+                                      <strong>Recommendation:</strong>{" "}
+                                      {result.recommendation}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))}
               </TableBody>
             </Table>
