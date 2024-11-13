@@ -14,9 +14,10 @@ const initialState: JobMatchState = {
   error: null,
 };
 
-export const fetchMatchResults = createAsyncThunk(
+// Define ReturnType explicitly in the asyncThunk
+export const fetchMatchResults = createAsyncThunk<MatchResult[], { userId: string; resumeEntryIds: string[]; jobIds: string[] }>(
   "jobMatch/fetchMatchResults",
-  async ({ userId, resumeEntryIds, jobIds }: { userId: string; resumeEntryIds: string[]; jobIds: string[] }) => {
+  async ({ userId, resumeEntryIds, jobIds }) => {
     const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/resume/matcher`, {
       method: "POST",
       headers: {
@@ -31,7 +32,6 @@ export const fetchMatchResults = createAsyncThunk(
     }
 
     return Array.isArray(data.results) ? data.results : [];
-    return data.results;
   }
 );
 
@@ -48,7 +48,8 @@ const jobMatchSlice = createSlice({
     updateMatchResultProgress: (state, action: PayloadAction<MatchResult[]>) => {
       const newResults = action.payload;
       const currentJobIds = new Set(state.matchResults.map(result => result.jobId));
-
+      console.log(currentJobIds)
+      console.log("Updating match results U:", newResults);
       newResults.forEach(newResult => {
         if (!currentJobIds.has(newResult.jobId)) {
           state.matchResults.push(newResult);
@@ -61,36 +62,34 @@ const jobMatchSlice = createSlice({
       state.loading = false;
     },
   },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchMatchResults.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchMatchResults.fulfilled, (state, action) => {
+        const newResults = action.payload;
+        const currentJobIds = new Set(state.matchResults.map(result => result.jobId));
 
-// In jobMatchSlice, update reducers with a type check
-extraReducers: (builder) => {
-  builder
-    .addCase(fetchMatchResults.pending, (state) => {
-      state.loading = true;
-      state.error = null;
-    })
-    .addCase(fetchMatchResults.fulfilled, (state, action: PayloadAction<MatchResult[]>) => {
-      const newResults = action.payload;
-      const currentJobIds = new Set(state.matchResults.map(result => result.jobId));
+        if (Array.isArray(newResults)) {
+          newResults.forEach(newResult => {
+            if (!currentJobIds.has(newResult.jobId)) {
+              state.matchResults.push(newResult);
+              currentJobIds.add(newResult.jobId);
+            }
+          });
+        } else {
+          console.error("Expected newResults to be an array, got:", newResults);
+        }
 
-      if (Array.isArray(newResults)) {  // Ensure newResults is an array
-        newResults.forEach(newResult => {
-          if (!currentJobIds.has(newResult.jobId)) {
-            state.matchResults.push(newResult);
-            currentJobIds.add(newResult.jobId);
-          }
-        });
-      } else {
-        console.error("Expected newResults to be an array, got:", newResults);
-      }
-
-      state.loading = false;
-    })
-    .addCase(fetchMatchResults.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.error.message || "Failed to fetch match results";
-    });
-}
+        state.loading = false;
+      })
+      .addCase(fetchMatchResults.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || "Failed to fetch match results";
+      });
+  }
 });
 
 export const { setMatchResults, clearMatchResults, updateMatchResultProgress } = jobMatchSlice.actions;

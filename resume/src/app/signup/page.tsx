@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { SignupResponse } from '@/types/user'
 
 export default function SignupPage() {
   const [name, setName] = useState('')
@@ -45,19 +46,14 @@ export default function SignupPage() {
         }),
       })
 
-      console.log('Response:', response)
+      const data: SignupResponse = await response.json()
 
-      if (!response.ok) {
-        const data = await response.json()
-        console.log('Error Data:', data)
-        if (data.message === 'Email already exists') {
-          toast.error("Email is already registered. Please use a different email.")
-        } else {
-          throw new Error(data.message || 'Failed to create account')
-        }
-      } else {
-        toast.success("Signup successful!")
+      if (data.success) {
+        toast.success(data.message)
         router.push('/login') // Redirect to login page after signup
+
+      } else {
+        toast.error(data.message)        
       }
 
     } catch (error) {

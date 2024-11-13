@@ -20,6 +20,45 @@ import { resume_matchschema } from "../models/gemini.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function to check and reset the count if a minute has passed
+let apiRequestCount = 0;
+let lastRequestTimestamp = Date.now();
+ 
+// Helper function to check and reset the count if a minute has passed
+const checkAndResetApiRequestCount = () => {
+  const currentTime = Date.now();
+  const timeElapsed = currentTime - lastRequestTimestamp;
+
+  if (timeElapsed >= 60000) {
+    // If more than 60 seconds have passed
+    apiRequestCount = 0; // Reset the counter
+    lastRequestTimestamp = currentTime; // Update the timestamp
+  }
+};
+
+// Helper function to wait until the LLM API is available again
+
+const waitUntilAvailable = async () => {
+  while (apiRequestCount >= 15) {
+    const currentTime = Date.now();
+    const timeElapsed = currentTime - lastRequestTimestamp;
+    const timeRemaining = Math.max(0, 60 - Math.floor(timeElapsed / 1000)); // Calculate remaining time in seconds
+
+    if (io) {
+      io.emit("progress", {
+        success: false,
+        message: `Please wait, we are overloaded. Avaiable in ${timeRemaining} second${
+          timeRemaining === 1 ? "" : "s"
+        }.`,
+      });
+    }
+
+    // Wait for 1 second before checking again
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    checkAndResetApiRequestCount(); // Recheck the rate limit
+  }
+};
+
 async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash-latest",
@@ -135,7 +174,7 @@ export const matcher = TryCatch(async (req, res, next) => {
   }
 
   const fitThreshold = 70;
-  let apiRequestCount = 0;
+
 
   try {
     const jobDataArray = selectallJob
@@ -213,6 +252,11 @@ export const matcher = TryCatch(async (req, res, next) => {
             continue; // Skip LLM evaluation for existing match
           }
         }
+
+        await waitUntilAvailable(); // Wait until the API is available before continuing
+
+        // After waiting, check the rate limit again
+        checkAndResetApiRequestCount();
 
         // Call LLM only if no match is found
         const { evaluationText, compositeScore, scores, recommendation, isfit } =

@@ -25,7 +25,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 import {
   downloadPrepResourcePDF,
-  downloadPrepResourcesDocx,
+  // downloadPrepResourcesDocx,
   parsePreparationResources,
 } from "@/lib/fileparse";
 import { fetchJobs, setIsSearch } from "@/lib/store/features/job/jobSearch";

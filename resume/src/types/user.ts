@@ -1,11 +1,8 @@
 interface UserData{
     email: string;
     password: string;
-    firstname: string;
-    lastname: string;
+    name: string;
     phone: string;
-    keywords: string[];
-
 }
 
 interface data{
@@ -13,6 +10,12 @@ interface data{
     user: UserData,
 }
 export interface loginResponse {
+    success: boolean,
+    message: string,
+    data: data,
+}
+
+export interface SignupResponse {
     success: boolean,
     message: string,
     data: data,

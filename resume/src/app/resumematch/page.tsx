@@ -1,4 +1,13 @@
 "use client";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
 import { jwtDecode } from "jwt-decode";
 
 import { ResumeMatchResults } from "@/components/resume-match-results";
@@ -18,7 +27,7 @@ import Sidebar from "@/components/ui/sidebar";
 import { fetchJobs, setIsSearch } from "@/lib/store/features/job/jobSearch";
 import {
   fetchMatchResults,
-  updateMatchResultProgress,
+  // updateMatchResultProgress,
 } from "@/lib/store/features/resume/matchSlice";
 import { fetchResumes } from "@/lib/store/features/resume/resumeSlice";
 import { MatchResultResponse } from "@/types/matcher";
@@ -47,6 +56,16 @@ export default function ResumeMatcher() {
   const auth = useSelector((state: RootState) => state.auth);
   const router = useRouter();
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleViewDetailsClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
   useEffect(() => {
     if (!jobs.length || isSearch) {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
@@ -57,7 +76,6 @@ export default function ResumeMatcher() {
       dispatch(fetchResumes(auth.userId));
     }
   }, [dispatch, jobs.length, auth.userId, resumes.length, isSearch]);
-  
 
   const filteredJobs = jobs.filter((job) => {
     const jobDate = new Date(job.datePosted);
@@ -133,22 +151,21 @@ export default function ResumeMatcher() {
       const selectedJobIds = prev.filter((id) =>
         filteredJobs.some((job) => job._id === id)
       );
-  
+
       return isAlreadySelected ? [] : [resumeId, ...selectedJobIds];
     });
   };
-  
+
   const toggleJob = (jobId: string) => {
     setSelectedJobs((prev) => {
       const isAlreadySelected = prev.includes(jobId);
       const selectedResumeIds = prev.filter((id) =>
         resumes.some((resume) => resume._id === id)
       );
-  
+
       return isAlreadySelected ? [] : [jobId, ...selectedResumeIds];
     });
   };
-  
 
   // Helper functions for getting and decoding token
   const getToken = () => {
@@ -185,6 +202,12 @@ export default function ResumeMatcher() {
       filteredJobs.some((job) => job._id === jobId)
     );
 
+    // Check if no resume or job is selected
+    if (resumeEntryIds.length === 0 || jobIds.length === 0) {
+      toast.error("Please select at least one resume and one job.");
+      return;
+    }
+
     toast.info("Job Match requested sent");
 
     try {
@@ -214,8 +237,9 @@ export default function ResumeMatcher() {
         toast.warning(data.message);
         return;
       }
-      dispatch(updateMatchResultProgress(data.results));
-
+      // if (data.results.length > 0) {
+      //   dispatch(updateMatchResultProgress(data.results));
+      // }
       // Optionally show a toast notification for progress
       toast.info(data.message);
     });
@@ -399,17 +423,49 @@ export default function ResumeMatcher() {
                         <span className="text-gray-500 text-xs">
                           {new Date(job.datePosted).toLocaleDateString()}
                         </span>
-                        <a
-                          href={job.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Link className="w-4 h-4 mr-1" />
-                          View
-                        </a>
+                        {job.url ? (
+                          <a
+                            href={job.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                          >
+                            <Link className="w-4 h-4 mr-2" />
+                            View Details
+                          </a>
+                        ) : (
+                          <button
+                            onClick={handleViewDetailsClick}
+                            className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                          >
+                            <Link className="w-4 h-4 mr-2" />
+                            View Details
+                          </button>
+                        )}
                       </Label>
+                      <Dialog
+                        open={isModalOpen}
+                        onOpenChange={handleCloseModal}
+                      >
+                        <DialogContent className="max-w-lg mx-auto p-4 sm:p-6 md:p-8 max-h-[80vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle>Job Details</DialogTitle>
+                          </DialogHeader>
+                          <DialogDescription>
+                            <div className="mt-4">
+                              <span>{job.description}</span>
+                            </div>
+                          </DialogDescription>
+                          <DialogFooter>
+                            <button
+                              onClick={handleCloseModal}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              Close
+                            </button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   ))}
                   {(loading || hasNextPage) && (

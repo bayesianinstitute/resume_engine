@@ -10,10 +10,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Job } from "@/types/job";
 import { Label } from "@radix-ui/react-label";
 import { Briefcase, Link } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
-
-
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface JobOpportunitiesProps {
   jobs: Job[];
@@ -43,12 +49,23 @@ export const JobOpportunities = ({
     rootMargin: "0px 0px 400px 0px",
   });
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleViewDetailsClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
   return (
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle>Job Opportunities</CardTitle>
         <CardDescription>
-          <span className="text-lg font-semibold">Total Jobs: {totalJobs}</span><br />
+          <span className="text-lg font-semibold">Total Jobs: {totalJobs}</span>
+          <br />
           <span className="text-sm">
             Select a job or enter a custom description to get started.
           </span>
@@ -79,17 +96,47 @@ export const JobOpportunities = ({
                   <span className="text-gray-500 text-xs">
                     {new Date(job.datePosted).toLocaleDateString()}
                   </span>
-                  <a
-                    href={job.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Link className="w-4 h-4 mr-1" />
-                    View
-                  </a>
+                  {job.url ? (
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Link className="w-4 h-4 mr-1" />
+                      View Details
+                    </a>
+                  ) : (
+                    <button
+                      onClick={handleViewDetailsClick}
+                      className="ml-auto inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                    >
+                      <Link className="w-4 h-4 mr-2" />
+                      View Details
+                    </button>
+                  )}
                 </Label>
+                <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
+                  <DialogContent className="max-w-lg mx-auto p-4 sm:p-6 md:p-8 max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Job Details</DialogTitle>
+                    </DialogHeader>
+                    <DialogDescription>
+                      <div className="mt-4">
+                        <span>{job.description}</span>
+                      </div>
+                    </DialogDescription>
+                    <DialogFooter>
+                      <button
+                        onClick={handleCloseModal}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Close
+                      </button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             ))}
           </div>
