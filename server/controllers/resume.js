@@ -29,34 +29,42 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
     },
   });
   const prompt = `
-    Evaluate the following resume against the job description. For each criterion, provide a score out of 100:
-    - Relevance to the job role
-    - Skills and expertise
-    - Experience level
-    - Presentation and clarity
+  Evaluate the following resume against the job description. For each criterion, provide a score out of 100:
+  - Relevance to the job role
+  - Skills and expertise
+  - Experience level
+  - Presentation and clarity
 
-    Also, calculate a composite score. If the composite score is below ${fitThreshold}, include a recommendation for improvement.
+  Use a positive and supportive scoring approach, emphasizing strengths and giving the benefit of the doubt for minor gaps. Aim to highlight areas where the candidate shows potential even if direct experience or skills are slightly lacking.
 
-    Resume:
-    ${resumeText}
+  For the composite score, calculate it based on the following weightages:
+  - Relevance: 20%
+  - Skills: 35%
+  - Experience: 35%
+  - Presentation: 10%
 
-    Job Description:
-    ${jobDescription}
+  Ensure that the composite score leans towards fit unless there are major discrepancies.
 
-    Note: 
-    Respond strictly in the following JSON format:
-    {
-      "scores": {
-        "relevance": <score>,
-        "skills": <score>,
-        "experience": <score>,
-        "presentation": <score>
-      },
-      "compositeScore": <score>,
-      "recommendation": "<one concise suggestion if applicable>",
-      "isfit": true/false
-    }
-  `;
+  Resume:
+  ${resumeText}
+
+  Job Description:
+  ${jobDescription}
+
+  Note: 
+  Respond strictly in the following JSON format:
+  {
+    "scores": {
+      "relevance": <score>,
+      "skills": <score>,
+      "experience": <score>,
+      "presentation": <score>
+    },
+    "compositeScore": <weighted score>,
+    "recommendation": "<one concise suggestion if applicable>",
+    "isfit": true/false
+  }
+`;
 
   try {
     const result = await model.generateContent(prompt);
