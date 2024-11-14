@@ -97,9 +97,15 @@ export default function ResumeViewer() {
       return;
     }
 
+    if (!auth.userId || !auth.token){
+      toast.error("Please login to upload a resume.");
+      router.push('/login');
+      return;
+    }
+
     const formData = new FormData();
     formData.append("resume", files[0]);
-    formData.append("userId", auth.userId!);
+    formData.append("userId", auth.userId);
 
     try {
       dispatch(setLoading(true));

@@ -4,6 +4,7 @@ import ErrorHandler from "../utils/utitlity.js";
 import { generateToken } from "../middleware/auth.js";
 import bcrypt from "bcrypt";
 import { sendVerificationEmail } from "../mail/send.js";
+
 export const Login = async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -31,11 +32,15 @@ export const Login = async (req, res, next) => {
   // Create JWT token
   const token = generateToken({ email: email, userId: String(user._id) });
 
+  // const expireTime=new Date(Date.now() + 900000) // Token expires in 15 minutes
+  const expireTime = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000); // Token expires in 15 days
+
+
   // Send token in response
   res
     .status(200)
     .cookie("token", token, {
-      expires: new Date(Date.now() + 900000), // Token expires in 15 minutes
+      expires: expireTime,
       httpOnly: true,
     })
     .json({
