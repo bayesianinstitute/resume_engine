@@ -146,9 +146,16 @@ export default function ResumeViewer() {
     if (selectedResume && selectedResume.resume) {
       // Assuming `resume` contains the relative path "uploads/resumes/fileName.pdf"
       const fileName = selectedResume.resume.split("/").pop(); // Get the file name only
+      const baseurl = process.env.NEXT_PUBLIC_BASE_URL; // This will be 'http://127.0.0.1:5000/api/v1'
+
+      if (!baseurl){
+        return
+      }
+
+      const fileUrl = `${baseurl.split('/api/v1')[0]}/${fileName}`;
 
       // Download link to backend download API
-      const fileUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/resume/view/${fileName}`;
+      // const fileUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/uploads/view/${fileName}`;
       window.open(fileUrl, "_blank"); // Open the URL in a new tab to trigger download
     }
   };
