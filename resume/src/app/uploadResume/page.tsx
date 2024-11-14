@@ -152,7 +152,7 @@ export default function ResumeViewer() {
         return
       }
 
-      const fileUrl = `${baseurl.split('/api/v1')[0]}/${fileName}`;
+      const fileUrl = `${baseurl.split('/api/v1')[0]}/uploads/${fileName}`;
 
       // Download link to backend download API
       // const fileUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/uploads/view/${fileName}`;
