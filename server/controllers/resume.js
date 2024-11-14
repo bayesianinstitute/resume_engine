@@ -491,7 +491,7 @@ export const stats = TryCatch(async (req, res, next) => {
   }
 });
 
-export const resumeview = async (req, res) => {
+export const resumeview = async (req, res, next) => {
   const { userId, fileName } = req.params;
 
   try {
@@ -505,11 +505,11 @@ export const resumeview = async (req, res) => {
 
     // Check if the file exists
     if (fs.existsSync(resumeFilePath)) {
-      // Set headers to prompt file download
-      res.setHeader("Content-Type", "application/pdf");
+      // Set headers to display the file in the browser (not force download)
+      res.setHeader("Content-Type", "application/pdf"); // Assuming PDF for resume files
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${fileName}"`
+        `inline; filename="${fileName}"` // 'inline' for browser display
       );
 
       // Stream the file to the response
@@ -525,6 +525,8 @@ export const resumeview = async (req, res) => {
     );
   }
 };
+
+
 
 export const getAllResumes = TryCatch(async (req, res, next) => {
   const { userId } = req.query;
