@@ -144,21 +144,25 @@ export default function ResumeViewer() {
 
   const handleDownloadResume = () => {
     if (selectedResume && selectedResume.resume) {
-      // Assuming `resume` contains the relative path "uploads/resumes/fileName.pdf"
-      const fileName = selectedResume.resume.split("/").pop(); // Get the file name only
-      const baseurl = process.env.NEXT_PUBLIC_BASE_URL; // This will be 'http://127.0.0.1:5000/api/v1'
-
-      if (!baseurl){
-        return
+      // Normalize the file name by removing any leading "uploads/" or backslashes
+      const fileName = selectedResume.resume.replace(/^uploads[\\/]+/, "");
+      
+      const baseurl = process.env.NEXT_PUBLIC_BASE_URL; // e.g., 'http://127.0.0.1:5000/api/v1'
+  
+      if (!baseurl) {
+        return;
       }
-
+  
+      // Construct the file URL without duplicating "uploads"
       const fileUrl = `${baseurl.split('/api/v1')[0]}/uploads/${fileName}`;
-
-      // Download link to backend download API
-      // const fileUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/uploads/view/${fileName}`;
-      window.open(fileUrl, "_blank"); // Open the URL in a new tab to trigger download
+      console.log(fileUrl);
+  
+      // Open the URL in a new tab to trigger download
+      window.open(fileUrl, "_blank");
     }
   };
+  
+  
 
   const handleDeleteResume = async (Resume: Resume) => {
     try {

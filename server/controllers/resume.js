@@ -15,7 +15,10 @@ import { MatchResult } from "../models/MatchResult.js";
 import { io } from "../socket.js";
 import ErrorHandler from "../utils/utitlity.js";
 
-import { resume_matchschema } from "../models/gemini.js";
+import {
+  resume_evaluation_schema,
+  resume_matchschema,
+} from "../models/gemini.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +26,16 @@ const __dirname = path.dirname(__filename);
 // Helper function to check and reset the count if a minute has passed
 let apiRequestCount = 0;
 let lastRequestTimestamp = Date.now();
- 
+
+const isValidJSON = (text) => {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    console.log("it is not a valid JSON");
+    return false;
+  }
+};
 // Helper function to check and reset the count if a minute has passed
 const checkAndResetApiRequestCount = () => {
   const currentTime = Date.now();
@@ -114,15 +126,6 @@ async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
     // let response = result.response.text().trim();
 
     // Function to check if the response is valid JSON
-    const isValidJSON = (text) => {
-      try {
-        JSON.parse(text);
-        return true;
-      } catch {
-        console.log("it is not a valid JSON");
-        return false;
-      }
-    };
 
     // If response is not valid JSON, resend the request
     if (!isValidJSON(response)) {
@@ -174,7 +177,6 @@ export const matcher = TryCatch(async (req, res, next) => {
   }
 
   const fitThreshold = 70;
-
 
   try {
     const jobDataArray = selectallJob
@@ -238,7 +240,9 @@ export const matcher = TryCatch(async (req, res, next) => {
 
         if (existingMatch) {
           const existingJobResult = existingMatch.resumes
-            .find((r) => r.resumeEntryId.toString() === resumeEntryId.toString())
+            .find(
+              (r) => r.resumeEntryId.toString() === resumeEntryId.toString()
+            )
             ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
 
           if (existingJobResult) {
@@ -259,8 +263,17 @@ export const matcher = TryCatch(async (req, res, next) => {
         checkAndResetApiRequestCount();
 
         // Call LLM only if no match is found
-        const { evaluationText, compositeScore, scores, recommendation, isfit } =
-          await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
+        const {
+          evaluationText,
+          compositeScore,
+          scores,
+          recommendation,
+          isfit,
+        } = await getLLMEvaluation(
+          resumeText,
+          jobData.description,
+          fitThreshold
+        );
 
         apiRequestCount++;
 
@@ -347,9 +360,6 @@ export const matcher = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("An error occurred", 500));
   }
 });
-
-
-
 
 export const getResumeMatchResults = TryCatch(async (req, res, next) => {
   const { userId, filterByFit } = req.query; // Use query params for filtering
@@ -456,6 +466,13 @@ export const stats = TryCatch(async (req, res, next) => {
     // Format strengths and weaknesses as arrays of objects
     const formattedStrengths = strengths.map((point) => ({ point }));
     const formattedWeaknesses = weaknesses.map((point) => ({ point }));
+    const formattedSkills =
+      skills.length > 0
+        ? skills.map((skill) => ({
+            skillName: skill.skillName,
+            skillLevel: skill.skillLevel,
+          }))
+        : [{ skillName: "No skill found in resume", skillLevel: 0 }];
 
     // Store the relative path and analysis data in the database
     const resumeRecord = await Resume.findOneAndUpdate(
@@ -467,21 +484,18 @@ export const stats = TryCatch(async (req, res, next) => {
             filename: fileName,
             strengths: formattedStrengths,
             weaknesses: formattedWeaknesses,
-            skills: skills.map((skill) => ({
-              skillName: skill.skillName,
-              skillLevel: skill.skillLevel,
-            })),
+            skills: formattedSkills,
           },
         },
       },
       { new: true, upsert: true }
     );
 
+    // Send successful response
     res.json({
       success: true,
-      message: "Resume Upload and analysis data successfully!",
+      message: "Resume uploaded and analysis data saved successfully!",
       data: resumeRecord,
-      // resumeId: resumeRecord._id.toString(), // Send resume _id in response
     });
   } catch (error) {
     console.error("Error processing resume:", error);
@@ -525,8 +539,6 @@ export const resumeview = async (req, res, next) => {
     );
   }
 };
-
-
 
 export const getAllResumes = TryCatch(async (req, res, next) => {
   const { userId } = req.query;
@@ -585,8 +597,8 @@ export const deleteResume = TryCatch(async (req, res, next) => {
   try {
     // Define the base directory for resume uploads
     const resumeFilePath = resume;
-    
-    console.log("Resuming upload",resumeFilePath);
+
+    console.log("Resuming upload", resumeFilePath);
 
     // Check if the file exists and delete it from the server
     if (fs.existsSync(resumeFilePath)) {
@@ -702,83 +714,62 @@ export async function getLLMEvaluationStats(resumeText) {
 
     Specifically provide the following:
     
-    - **Strengths**: A list of strengths based on the resume content.
-    - **Weaknesses**: A list of weaknesses or areas where improvement is needed.
-    - **Skills and Proficiency**: Assign a numeric value out of 100 for each relevant technical skill. For example, Python, React, Machine Learning, SQL, etc.
+    - Strengths: A list of strengths based on the resume content.
+    - Weaknesses: A list of weaknesses or areas where improvement is needed.
+    - Skills and Proficiency: Assign a numeric value out of 100 for each relevant technical skill. For example, Python, React, Machine Learning, SQL, etc.
 
     Resume Content:
     ${resumeText}
 
-    Your response format should be:
-
-    - **Strengths**: [list of strengths]
-    - **Weaknesses**: [list of weaknesses]
-    - **Skills and Proficiency**: [skill1: proficiency, skill2: proficiency, skill3: proficiency, ...]
-
-    Example format:
-    - Strengths: Strong Python skills, clear project descriptions.
-    - Weaknesses: Limited experience in SQL.
-    - Skills and Proficiency: Python: 85, React: 70, SQL: 60, Machine Learning: 55
+    Your response format should be in JSON as follows:
+    {
+      "strengths": ["list of strengths"],
+      "weaknesses": ["list of weaknesses"],
+      "skills": [
+        {"skillName": "Python", "skillLevel": 85},
+        {"skillName": "React", "skillLevel": 70}
+        ...
+      ]
+    }
   `;
 
   try {
-    const chatSession = genAIModel.startChat({
-      history: [],
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash-latest",
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: resume_evaluation_schema,
+      },
     });
 
-    const result = await chatSession.sendMessage(prompt);
+    const result = await model.generateContent(prompt);
+    let text =  result.response.text();
 
-    const response = result.response.text();
+    // Check if the response is valid JSON and parse it
+    let responseJson = isValidJSON(text) ? JSON.parse(text) : null;
 
-    // Regex to extract strengths, weaknesses, and skills sections
-    const strengthsMatch = response.match(
-      /(?<=\*\*Strengths\*\*:\s*)([\s\S]+?)(?=\*\*Weaknesses\*\*:)/i
-    );
-    const weaknessesMatch = response.match(
-      /(?<=\*\*Weaknesses\*\*:\s*)([\s\S]+?)(?=\*\*Skills and Proficiency\*\*:)/i
-    );
-    const skillsMatch = response.match(
-      /(?<=\*\*Skills and Proficiency\*\*:\s*)([\s\S]+)/i
-    );
+    // Retry once if the response is not valid JSON
+    if (!responseJson) {
+      console.log("Retrying API call due to invalid JSON response...");
+      const retryResult = await model.generateContent(prompt);
+      text =  retryResult.response.text();
+      responseJson = isValidJSON(text) ? JSON.parse(text) : null;
+    }
 
-    // Parse strengths and weaknesses into arrays based on dash "-" or newline delimiters
-    const strengths =
-      strengthsMatch && strengthsMatch[0].trim()
-        ? strengthsMatch[0]
-            .split(/\s*-\s+/) // Split on dash followed by whitespace
-            .filter((s) => s.trim() !== "") // Filter out any empty items
-        : ["No specific strengths identified."];
 
-    const weaknesses =
-      weaknessesMatch && weaknessesMatch[0].trim()
-        ? weaknessesMatch[0]
-            .split(/\s*-\s+/) // Split on dash followed by whitespace
-            .filter((w) => w.trim() !== "")
-        : ["No specific weaknesses identified."];
-
-    // Parse skills into an array of objects with skill name and level
-    const skills =
-      skillsMatch && skillsMatch[0].trim()
-        ? skillsMatch[0]
-            .split(/\n+/) // Split by newline
-            .map((skill) => {
-              const match = skill.match(/([\w\s\(\)]+):\s*(\d+)/); // Capture skill name and level
-              if (match) {
-                return {
-                  skillName: match[1].trim(),
-                  skillLevel: parseInt(match[2], 10),
-                };
-              }
-              return null;
-            })
-            .filter(Boolean) // Remove null values
-        : [{ skillName: "No skills identified", skillLevel: 0 }];
-
-    return {
-      strengths,
-      weaknesses,
-      skills,
-    };
+    // Validate the JSON structure
+    if (
+      responseJson.strengths &&
+      Array.isArray(responseJson.strengths) &&
+      responseJson.weaknesses &&
+      Array.isArray(responseJson.weaknesses) &&
+      responseJson.skills &&
+      Array.isArray(responseJson.skills)
+    ) {
+      return responseJson;
+    } else {
+      throw new Error("Invalid response format from LLM");
+    }
   } catch (error) {
     console.error("Error fetching LLM evaluation:", error);
     return {
