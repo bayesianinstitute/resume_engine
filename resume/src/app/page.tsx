@@ -15,9 +15,10 @@ export default function Home() {
       const pathname = window.location.pathname; // Get the current path directly from the window
 
       // Skip token verification and redirection if the path includes "/reset-password/"
-      if (pathname.startsWith("/reset-password/")) {
+      if (pathname.startsWith("/reset-password/") || pathname.startsWith("/complete-signup/")) {
         return;
       }
+
 
       const token = localStorage.getItem("token"); // Check for token in localStorage
 

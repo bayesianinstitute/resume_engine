@@ -21,9 +21,10 @@ export default function AuthLayout({
     const pathname = window.location.pathname // Get the current path
 
     // Skip redirection for reset password route
-    if (pathname.startsWith('/reset-password/')) {
+    if (pathname.startsWith('/reset-password/') || pathname.startsWith("/complete-signup/")) {
       return
     }
+
 
     if (!token) {
       router.replace('/login') // Redirect to login if token is missing

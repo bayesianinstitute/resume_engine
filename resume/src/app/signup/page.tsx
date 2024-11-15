@@ -10,26 +10,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { SignupResponse } from '@/types/user'
 
 export default function SignupPage() {
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [phone, setPhone] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (password !== confirmPassword) {
       toast.error("Passwords do not match")
       return
     }
 
-   
     setIsLoading(true)
 
     try {
@@ -39,30 +36,24 @@ export default function SignupPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name,
           email,
           password,
-          phone,
         }),
       })
 
-      const data: SignupResponse = await response.json()
+      const data = await response.json()
 
-      if (data.success) {
+      if (response.ok && data.success) {
         toast.success(data.message)
-        router.push('/login') // Redirect to login page after signup
-
+        toast.info("Check your email for verification.")
+        router.push('/verification-pending') // Redirect to pending verification page
       } else {
-        toast.error(data.message)        
+        toast.error(data.message || 'Signup failed. Please try again.')
       }
 
     } catch (error) {
-      console.error('Error details:', error)
-      if (error instanceof Error) {
-        toast.error(error.message || 'An error occurred. Please try again.')
-      } else {
-        toast.error('An unexpected error occurred. Please try again.')
-      }
+      console.error('Error:', error)
+      toast.error('An unexpected error occurred. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -82,47 +73,25 @@ export default function SignupPage() {
           <form onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input 
-                  id="name" 
-                  type="text" 
-                  placeholder="John Doe" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="m@example.com" 
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="m@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input 
-                  id="phone" 
-                  type="tel" 
-                  placeholder="1234567890" 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required 
+                  required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
-                  <Input 
-                    id="password" 
+                  <Input
+                    id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required 
+                    required
                   />
                   <Button
                     type="button"
@@ -140,12 +109,12 @@ export default function SignupPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input 
-                  id="confirmPassword" 
-                  type="password" 
+                <Input
+                  id="confirmPassword"
+                  type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  required 
+                  required
                 />
               </div>
             </div>

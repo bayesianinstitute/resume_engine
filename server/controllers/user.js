@@ -3,7 +3,8 @@ import { TryCatch } from "../middleware/error.js";
 import ErrorHandler from "../utils/utitlity.js";
 import { generateToken } from "../middleware/auth.js";
 import bcrypt from "bcrypt";
-import { sendVerificationEmail } from "../mail/send.js";
+import { sendVerificationEmail,sendVerificationEmailSignup } from "../mail/send.js";
+
 
 export const Login = async (req, res, next) => {
   const { email, password } = req.body;
@@ -70,37 +71,96 @@ export const getUser = TryCatch(async (req, res, next) => {
     });
 });
 
+export const newUser = TryCatch(async (req, res, next) => {
+
+    const { email, password } = req.body;
+
+    console.log("Email ", email, password);
+    if (!email || !password)
+      return next(
+        new ErrorHandler("Please Enter all required parameters", 400)
+      );
+
+    // Find user by email
+    const user = await User.findOne({ email });
+
+    // If user  found, send error message
+    if (user) return next(new ErrorHandler("User Already Exist", 400));
+
+    // Find user by email
+    const pending = await PendingUser.findOne({ email });
+
+    // If pending found, send error message
+    if (pending)
+      return next(
+        new ErrorHandler("Pending User Please complete Verification ", 400)
+      );
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const verificationToken = generateToken({ email });
+
+    const pendingUser = new PendingUser({
+      email,
+      password: hashedPassword,
+      verificationToken,
+    });
+    await pendingUser.save();
+
+    // Send verification email
+    sendVerificationEmailSignup(email, verificationToken);
+
+    return res.status(200).json({
+      success: true,
+      message: `Signup successful. Please verify your email : ${pendingUser.email} `,
+    });
+  }
+);
+
 export const completeUser = TryCatch(async (req, res, next) => {
-  const { name, password, phone, email } = req.body;
+  const { verifyToken, name, phone } = req.body;
   
-  // Find pending user by verification token
-  if (!name || !phone || !email || !password) {
-    return next(new ErrorHandler("Please give all required parameters", 400));
+  // Check for required parameters
+  if (!verifyToken || !name || !phone) {
+    return next(new ErrorHandler("Please provide all required parameters", 400));
   }
 
-  const existingUser = await User.findOne({ email: email.toLowerCase() });
+  // Find pending user by verification token
+  const pendingUser = await PendingUser.findOne({ verificationToken: verifyToken });
+
+  if (!pendingUser) {
+    return next(new ErrorHandler("Invalid or expired verification token", 401));
+  }
+
+  // Check if a user with the email already exists
+  const existingUser = await User.findOne({ email: pendingUser.email.toLowerCase() });
   if (existingUser) {
     return next(new ErrorHandler("User with this email already exists", 409));
   }
-  
-  const hashedPassword = await bcrypt.hash(password, 10);
-  // Create actual user from pending user data
+
+  // Create the actual user from pending user data, using the password from PendingUser
   const user = new User({
-    name: name,
-    email: email.toLowerCase(),
-    password: hashedPassword,
-    phone: phone,
+    name,
+    email: pendingUser.email.toLowerCase(),
+    password: pendingUser.password, // Use password from PendingUser
+    phone,
   });
-  // Save actual user to database
+
+  // Save the new user to the database
   await user.save();
 
-  // Send token in response
+  // Delete the pending user entry
+  await PendingUser.deleteOne({ _id: pendingUser._id });
+
+  // Send response
   return res.status(201).json({
     success: true,
     message: "Account setup completed successfully.",
-    data: { user: user },
+    data: { user },
   });
 });
+
+
 
 export const ForgotRequest = TryCatch(async (req, res, next) => {
   const { email } = req.body;

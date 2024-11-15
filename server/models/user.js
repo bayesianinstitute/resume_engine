@@ -7,7 +7,8 @@ const pendingUserSchema = new Schema({
     default: () => new mongoose.Types.ObjectId().toHexString(),
   },
   email: { type: String, required: true, unique: true },
-  verificationToken: { type: String, required: true, unique: true },
+  password: { type: String},
+  verificationToken: String,
 });
 
 

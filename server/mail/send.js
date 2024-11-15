@@ -51,6 +51,34 @@ export const sendVerificationEmail = (email, verificationToken) => {
         });
     });
 };
+
+export const sendVerificationEmailSignup = (email, verificationToken) => {
+    const verificationUrl = `${process.env.SITE_URL}:${process.env.SITE_PORT}/complete-signup/${verificationToken}`;
+    const templatePath = path.resolve(process.cwd(), 'views', 'mail.html'); // Use process.cwd() for current directory
+
+    // Read HTML template from file
+    fs.readFile(templatePath, 'utf8', (err, html) => {
+        if (err) {
+            console.error('Error reading HTML template file:', err);
+            return;
+        }
+
+        // Replace placeholders with dynamic content
+        const updatedHtml = html
+            .replace("[URL]", verificationUrl)
+            .replace("[TITLE]", "Complete your signup")
+            .replace("[CONTENT]", "Click the button below to complete your signup.")
+            .replace("[BTN_NAME]", "Complete Signup");
+
+        // Send email with dynamic HTML content
+        sendEmail({
+            to: email,
+            subject: `Complete Your Signup`,
+            html: updatedHtml,
+        });
+    });
+};
+
 export const sendErrorEmail = (error) => {
     const mailOptions = {
         from: process.env.MAIL_EMAIL,
