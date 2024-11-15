@@ -15,6 +15,7 @@ const resumeSchema = new mongoose.Schema({
       filename:{
         type:String, // file name
         required: true,
+        unique: true,
       },
       strengths: [
         {
