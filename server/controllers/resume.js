@@ -16,7 +16,7 @@ import ErrorHandler from "../utils/utitlity.js";
 
 import { User } from "../models/user.js";
 import { getLLMEvaluation, getLLMEvaluationStats } from "../services/llmService.js";
-import { convertToCSV, uploadCSVToS3 , uploadPDFToS3} from "../utils/s3Upload.js";
+import { convertToCSV, uploadCSVToS3 , uploadPDFToS3,deleteFromS3} from "../utils/s3Upload.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -590,7 +590,7 @@ export const stats = TryCatch(async (req, res, next) => {
       resumeText
     );
 
-    // Format strengths, weaknesses, and skills
+    // Format strengths and weaknesses as arrays of objects
     const formattedStrengths = strengths.map((point) => ({ point }));
     const formattedWeaknesses = weaknesses.map((point) => ({ point }));
     const formattedSkills =
@@ -639,7 +639,6 @@ export const stats = TryCatch(async (req, res, next) => {
     }
   }
 });
-
 
 export const resumeview =  TryCatch(async (req, res, next) => {
   const { userId, fileName } = req.params;
@@ -724,36 +723,24 @@ export const getAllResumes = TryCatch(async (req, res, next) => {
 
 export const deleteResume = TryCatch(async (req, res, next) => {
   const { userId, resume } = req.body;
-  // return next(new ErrorHandler("User ID and file name are required.", 400));
 
   if (!userId || !resume) {
-    return next(new ErrorHandler("User ID and file name are required.", 400));
+    return next(new ErrorHandler("User ID and resume URL are required.", 400));
   }
 
   try {
-    // Define the base directory for resume uploads
-    const resumeFilePath = resume;
-
-    console.log("Resuming upload", resumeFilePath);
-
-    // Check if the file exists and delete it from the server
-    if (fs.existsSync(resumeFilePath)) {
-      fs.unlinkSync(resumeFilePath); // Remove the file from the server
-    } else {
-      return next(new ErrorHandler("File not found on the server.", 400));
-    }
+    // Delete the file from S3
+    await deleteFromS3(resume);
 
     // Remove the resume reference from the database
     const updatedResume = await Resume.findOneAndUpdate(
       { userId },
-      { $pull: { resumes: { resume: resume } } },
+      { $pull: { resumes: { resume } } },
       { new: true }
     );
 
     if (!updatedResume) {
-      return res
-        .status(404)
-        .json({ error: "Resume not found in the database." });
+      return res.status(404).json({ error: "Resume not found in the database." });
     }
 
     res.json({
@@ -763,9 +750,7 @@ export const deleteResume = TryCatch(async (req, res, next) => {
     });
   } catch (error) {
     console.error("Error deleting resume:", error);
-    return next(
-      new ErrorHandler("An error occurred while deleting the resume.", 500)
-    );
+    return next(new ErrorHandler("An error occurred while deleting the resume.", 500));
   }
 });
 
