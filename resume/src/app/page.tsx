@@ -12,6 +12,13 @@ export default function Home() {
 
   useEffect(() => {
     const verifyToken = async () => {
+      const pathname = window.location.pathname; // Get the current path directly from the window
+
+      // Skip token verification and redirection if the path includes "/reset-password/"
+      if (pathname.startsWith("/reset-password/")) {
+        return;
+      }
+
       const token = localStorage.getItem("token"); // Check for token in localStorage
 
       if (token) {
