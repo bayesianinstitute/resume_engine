@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { matcher,getResumeMatchResults, stats,getResumeAnalysis,getSkillProgresses,getStatusCount,getAllResumes,resumeview, deleteResume } from '../controllers/resume.js';
+import { matcher,getResumeMatchResults, stats,getResumeAnalysis,getSkillProgresses,getStatusCount,getAllResumes,resumeview, deleteResume, matcherEnterprice } from '../controllers/resume.js';
 import { getLinkedInJobs } from '../controllers/linkedinController.js';
 import { generatePreparationResources } from '../controllers/interviewController.js';
 import { getJobs, createJob, updateJobStatus,deleteJob } from '../controllers/jobTrackerController.js';
@@ -10,6 +10,7 @@ const router = express.Router();
 const upload = multer();
 
 router.post('/matcher', matcher);
+router.post('/matcherE', matcherEnterprice);
 router.get("/getResumeMatchResults", getResumeMatchResults);
 router.post('/stats', upload.single('resume'),verifyTokenMiddleware, stats);
 router.get('/getAllResumes', getAllResumes);
