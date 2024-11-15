@@ -567,19 +567,6 @@ export const stats = TryCatch(async (req, res, next) => {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  // Check if a resume with the same filename already exists for the user
-  const existingResume = await Resume.findOne({
-    userId,
-    "resumes.filename": fileName,
-  });
-
-  if (existingResume) {
-    return res.status(409).json({
-      success: false,
-      message: "A file with the same name already exists.",
-    });
-  }
-
   // Create a unique filename for the resume
   const resumeFileName = `${userId}-${Date.now()}-resume.pdf`;
   const resumeFilePath = path.join(uploadsDir, resumeFileName);
@@ -601,7 +588,7 @@ export const stats = TryCatch(async (req, res, next) => {
       resumeText
     );
 
-    // Format strengths, weaknesses, and skills
+    // Format strengths and weaknesses as arrays of objects
     const formattedStrengths = strengths.map((point) => ({ point }));
     const formattedWeaknesses = weaknesses.map((point) => ({ point }));
     const formattedSkills =
@@ -642,7 +629,6 @@ export const stats = TryCatch(async (req, res, next) => {
     );
   }
 });
-
 
 export const resumeview =  TryCatch(async (req, res, next) => {
   const { userId, fileName } = req.params;
