@@ -4,7 +4,7 @@ import { isValidJSON } from "../helpers/utils.js";
 
 export async function getLLMEvaluation(resumeText, jobDescription, fitThreshold) {
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-1.5-flash-8b",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: resume_matchschema,

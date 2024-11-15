@@ -15,8 +15,17 @@ import { io } from "../socket.js";
 import ErrorHandler from "../utils/utitlity.js";
 
 import { User } from "../models/user.js";
-import { getLLMEvaluation, getLLMEvaluationStats } from "../services/llmService.js";
-import { convertToCSV, uploadCSVToS3 , uploadPDFToS3,deleteFromS3} from "../utils/s3Upload.js";
+import {
+  getLLMEvaluation,
+  getLLMEvaluationStats,
+} from "../services/llmService.js";
+import {
+  convertToCSV,
+  uploadCSVToS3,
+  uploadPDFToS3,
+  deleteFromS3,
+  downloadFileFromS3,
+} from "../utils/s3Upload.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,8 +67,6 @@ const waitUntilAvailable = async () => {
     checkAndResetApiRequestCount(); // Recheck the rate limit
   }
 };
-
-
 
 export const matcher = TryCatch(async (req, res, next) => {
   const {
@@ -116,11 +123,25 @@ export const matcher = TryCatch(async (req, res, next) => {
         continue;
       }
 
-      const resumeName = resumeEntry.filename || "Untitled Resume";
-      const resumePath = resumeEntry.resume;
-      const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
+      const s3Key = resumeEntry.resume; // Assuming the key is stored in `resumeEntry.resume`
+      console.log("s3Key: " + s3Key);
+      const localFileName = `${resumeEntry.filename || "resume"}.pdf`;
+
+      // Download the file locally
+      const localFilePath = await downloadFileFromS3(s3Key, localFileName);
+
+      // Process the downloaded file
+      const pdfLoader = new PDFLoader(path.resolve(localFilePath));
       const resumeDocs = await pdfLoader.load();
       const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
+      const resumeName = resumeEntry.filename || "Untitled Resume";
+
+      // Delete the file after processing
+      try {
+        fs.unlinkSync(localFilePath); // Delete the file synchronously
+      } catch (err) {
+        console.error("Error deleting file:", err);
+      }
 
       const resumeJobResults = [];
 
@@ -159,7 +180,6 @@ export const matcher = TryCatch(async (req, res, next) => {
 
         // After waiting, check the rate limit again
         checkAndResetApiRequestCount();
-
         // Call LLM only if no match is found
         const {
           evaluationText,
@@ -268,16 +288,16 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
     selectallResume = false,
   } = req.body;
 
-
   if (!email) {
     return next(new ErrorHandler("Email is required", 400));
   }
 
   const user = await User.findOne({ email });
+  if (!user) {
+    return next(new ErrorHandler("User not found", 404));
+  }
 
-  const userId= user.id
-  console.log(userId);
-
+  const userId = user.id;
   const fitThreshold = 70;
 
   try {
@@ -299,6 +319,7 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
       return next(new ErrorHandler("No resumes found.", 404));
     }
 
+    const existingMatches = await MatchResult.find({ userId });
     const results = [];
 
     for (const resumeEntryId of resumeIdsToFetch) {
@@ -326,21 +347,19 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
       const resumeDocs = await pdfLoader.load();
       const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-      const resumeJobResults = [];
-
       for (const jobData of jobDataArray) {
-        if (!jobData || !jobData._id) {
-          console.warn("Invalid jobData:", jobData);
-          continue;
-        }
+        if (!jobData || !jobData._id) continue;
 
-        const existingMatch = await MatchResult.findOne({
-          userId,
-          "resumes.resumeEntryId": resumeEntryId,
-          "resumes.jobs.jobId": jobData._id,
-        });
+        const existingMatch = existingMatches.find((match) =>
+          match.resumes.some(
+            (r) =>
+              r.resumeEntryId.toString() === resumeEntryId.toString() &&
+              r.jobs.some((j) => j.jobId.toString() === jobData._id.toString())
+          )
+        );
 
         if (existingMatch) {
+          // Include existing matches in the results array
           const existingJobResult = existingMatch.resumes
             .find(
               (r) => r.resumeEntryId.toString() === resumeEntryId.toString()
@@ -348,23 +367,20 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
             ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
 
           if (existingJobResult) {
-            if (io) {
-              io.emit("progress", {
-                success: true,
-                message: `Match for job '${jobData.title}' and resume '${resumeName}' already exists in the database.`,
-                results: existingJobResult,
-              });
-            }
+            results.push({
+              resumeName,
+              jobTitle: jobData.title,
+              jobCompany: jobData.company,
+              evaluationResponse: existingJobResult.evaluationResponse,
+            });
             continue; // Skip LLM evaluation for existing match
           }
         }
 
-        await waitUntilAvailable(); // Wait until the API is available before continuing
-
-        // After waiting, check the rate limit again
+        await waitUntilAvailable();
         checkAndResetApiRequestCount();
 
-        // Call LLM only if no match is found
+        // Call LLM to evaluate the match
         const {
           evaluationText,
           compositeScore,
@@ -377,15 +393,13 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
           fitThreshold
         );
 
-        apiRequestCount++;
-
         const resultMessage =
           compositeScore >= fitThreshold
             ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
             : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`;
 
         const newJobResult = {
-          resumeName: resumeName,
+          resumeName,
           jobId: jobData._id,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
@@ -398,65 +412,18 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
           },
         };
 
-        resumeJobResults.push(newJobResult);
-
-        if (io) {
-          io.emit("progress", {
-            success: true,
-            message: `Progress: ${newJobResult.jobTitle} -> ${newJobResult.matchResult}`,
-            results: [newJobResult],
-          });
-        }
-      }
-
-      if (resumeJobResults.length > 0) {
-        const matchResult = await MatchResult.findOneAndUpdate(
-          { userId, "resumes.resumeEntryId": resumeEntryId },
-          {
-            $push: { "resumes.$.jobs": { $each: resumeJobResults } },
-            $set: { updatedAt: new Date() },
-          },
-          { new: true }
-        );
-
-        if (!matchResult) {
-          // If the resume entry doesn't exist in MatchResult, create it.
-          await MatchResult.updateOne(
-            { userId },
-            {
-              $push: {
-                resumes: {
-                  resumeEntryId,
-                  resumeName,
-                  jobs: resumeJobResults,
-                },
-              },
-              $set: { updatedAt: new Date() },
-            },
-            { upsert: true }
-          );
-        }
-
-        results.push(resumeJobResults);
-
-        if (io) {
-          io.emit("progress-batch", {
-            success: true,
-            message: "Completed new matches",
-            results: resumeJobResults,
-          });
-        }
+        results.push(newJobResult);
       }
     }
 
-    if (io) {
-      io.emit("done", {
-        message: "Matching process completed.",
-        results,
+    if (results.length === 0) {
+      return res.json({
+        message: "No match results found.",
+        success: false,
       });
     }
-    console.log("results",results[0])
-    const csvData = results.flat().map((jobResult) => ({
+
+    const csvData = results.map((jobResult) => ({
       "Resume Name": jobResult.resumeName,
       "Job Title": jobResult.jobTitle,
       "Company Name": jobResult.jobCompany,
@@ -469,17 +436,12 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
       Presentation: jobResult.evaluationResponse.scores.presentation,
       Recommendation: jobResult.evaluationResponse.recommendation,
     }));
-    console.log("csvData ",csvData)
-    // Convert JSON data to CSV format
+
     const csvContent = convertToCSV(csvData);
-    // Generate a unique file name
     const fileName = `match_results_${Date.now()}`;
-
-    // Upload CSV to S3 and get the file URL
     const s3FileUrl = await uploadCSVToS3(csvContent, fileName);
-    console.log("CSV uploaded to S3:", s3FileUrl);
 
-    return res.json({ message: "Match result", success: true,s3FileUrl });
+    return res.json({ message: "Match result", success: true, s3FileUrl });
   } catch (error) {
     console.error("Error processing resume match:", error);
     return next(new ErrorHandler("An error occurred", 500));
@@ -574,7 +536,7 @@ export const stats = TryCatch(async (req, res, next) => {
 
   // Create a unique filename for the temporary local file
   const uniqueFileName = `${userId}-${fileName}-resume`;
-  const tempFilePath = path.join(__dirname, '../uploads', uniqueFileName);
+  const tempFilePath = path.join(__dirname, "../uploads", uniqueFileName);
 
   try {
     // Save the file locally
@@ -640,7 +602,7 @@ export const stats = TryCatch(async (req, res, next) => {
   }
 });
 
-export const resumeview =  TryCatch(async (req, res, next) => {
+export const resumeview = TryCatch(async (req, res, next) => {
   const { userId, fileName } = req.params;
 
   try {
@@ -740,7 +702,9 @@ export const deleteResume = TryCatch(async (req, res, next) => {
     );
 
     if (!updatedResume) {
-      return res.status(404).json({ error: "Resume not found in the database." });
+      return res
+        .status(404)
+        .json({ error: "Resume not found in the database." });
     }
 
     res.json({
@@ -750,13 +714,13 @@ export const deleteResume = TryCatch(async (req, res, next) => {
     });
   } catch (error) {
     console.error("Error deleting resume:", error);
-    return next(new ErrorHandler("An error occurred while deleting the resume.", 500));
+    return next(
+      new ErrorHandler("An error occurred while deleting the resume.", 500)
+    );
   }
 });
 
-
-
-// other api : 
+// other api :
 
 export const getResumeAnalysis = async (req, res) => {
   const { userId } = req.body;

@@ -93,7 +93,7 @@ export const newUser = TryCatch(async (req, res, next) => {
     // If pending found, send error message
     if (pending)
       return next(
-        new ErrorHandler("Pending User Please complete Verification ", 400)
+        new ErrorHandler("Pending User Please check your Email to complete Verification ", 400)
       );
 
     const hashedPassword = await bcrypt.hash(password, 10);

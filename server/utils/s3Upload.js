@@ -19,10 +19,24 @@ const s3 = new AWS.S3();
 
 
 
+
 const convertToCSV = (data) => {
-  const json2csvParser = new Parser();
-  return json2csvParser.parse(data);
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    throw new Error("Data should not be empty and must be an array of objects.");
+  }
+
+  // Extract fields dynamically or define them explicitly
+  const fields = Object.keys(data[0]); // Assume all objects have the same keys
+
+  try {
+    const json2csvParser = new Parser({ fields });
+    return json2csvParser.parse(data);
+  } catch (error) {
+    console.error("Error converting to CSV:", error);
+    throw new Error("Failed to convert data to CSV.");
+  }
 };
+
 
 
 
@@ -88,4 +102,51 @@ const deleteFromS3 = async (s3Url) => {
     throw new Error("Failed to delete file from S3.");
   }
 };
-export { convertToCSV, uploadCSVToS3,uploadPDFToS3,deleteFromS3 };
+
+
+// Function to download a file from S3 and save it locally
+const downloadFileFromS3 = async ( s3Url,localFileName) => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  const localFilePath = path.join(__dirname, "../uploads", localFileName);
+  const s3Key = s3Url.split('.com/')[1]; // Assumes URL format: https://<bucket-name>.s3.<region>.amazonaws.com/<key>
+
+
+  const params = {
+    Bucket: process.env.S3_BUCKET_NAME,
+    Key: s3Key,
+  };
+
+  try {
+    const fileStream = fs.createWriteStream(localFilePath);
+
+    const s3Stream = s3.getObject(params).createReadStream();
+
+    s3Stream.on("error", (err) => {
+      console.error("S3 stream error:", err);
+      throw new Error("Failed to download file from S3.");
+    });
+
+    s3Stream.pipe(fileStream);
+
+    return new Promise((resolve, reject) => {
+      fileStream.on("finish", () => {
+        // console.log(`File downloaded successfully to ${localFilePath}`);
+        resolve(localFilePath);
+      });
+
+      fileStream.on("error", (err) => {
+        console.error("File write stream error:", err);
+        reject(new Error("Failed to save file locally."));
+      });
+    });
+  } catch (error) {
+    console.error("Error downloading file from S3:", error);
+    throw error;
+  }
+};
+
+
+
+export { convertToCSV, uploadCSVToS3,uploadPDFToS3,deleteFromS3,downloadFileFromS3 };
