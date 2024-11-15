@@ -16,7 +16,7 @@ import ErrorHandler from "../utils/utitlity.js";
 
 import { User } from "../models/user.js";
 import { getLLMEvaluation, getLLMEvaluationStats } from "../services/llmService.js";
-import { convertToCSV, uploadCSVToS3 } from "../utils/s3Upload.js";
+import { convertToCSV, uploadCSVToS3 , uploadPDFToS3} from "../utils/s3Upload.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -559,14 +559,6 @@ export const stats = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("Resume file is required.", 400));
   }
 
-  // Define the uploads directory inside the `server` folder
-  const uploadsDir = path.join(__dirname, "../uploads");
-
-  // Create the directory if it doesn't exist
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-
   // Check if a resume with the same filename already exists for the user
   const existingResume = await Resume.findOne({
     userId,
@@ -580,19 +572,16 @@ export const stats = TryCatch(async (req, res, next) => {
     });
   }
 
-  // Create a unique filename for the resume
-  const resumeFileName = `${userId}-${Date.now()}-resume.pdf`;
-  const resumeFilePath = path.join(uploadsDir, resumeFileName);
-
-  // Store only the relative path from the `uploads` directory
-  const relativePath = path.join("uploads", resumeFileName);
+  // Create a unique filename for the temporary local file
+  const uniqueFileName = `${userId}-${fileName}-resume`;
+  const tempFilePath = path.join(__dirname, '../uploads', uniqueFileName);
 
   try {
-    // Write the resume to the defined file path
-    fs.writeFileSync(resumeFilePath, resumeFile.buffer);
+    // Save the file locally
+    fs.writeFileSync(tempFilePath, resumeFile.buffer);
 
-    // Load and extract text from the resume PDF
-    const pdfLoader = new PDFLoader(resumeFilePath);
+    // Load and extract text from the temporary resume PDF file
+    const pdfLoader = new PDFLoader(tempFilePath);
     const resumeDocs = await pdfLoader.load();
     const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
@@ -612,13 +601,16 @@ export const stats = TryCatch(async (req, res, next) => {
           }))
         : [{ skillName: "No skill found in resume", skillLevel: 0 }];
 
-    // Store the relative path and analysis data in the database
+    // Upload the processed resume to S3
+    const s3Url = await uploadPDFToS3(resumeFile.buffer, uniqueFileName);
+
+    // Store the S3 URL and analysis data in the database
     const resumeRecord = await Resume.findOneAndUpdate(
       { userId },
       {
         $push: {
           resumes: {
-            resume: relativePath, // Store only the relative path
+            resume: s3Url, // Store the S3 URL
             filename: fileName,
             strengths: formattedStrengths,
             weaknesses: formattedWeaknesses,
@@ -640,6 +632,11 @@ export const stats = TryCatch(async (req, res, next) => {
     return next(
       new ErrorHandler("An error occurred while processing the resume.", 500)
     );
+  } finally {
+    // Ensure the temporary file is deleted
+    if (fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+    }
   }
 });
 

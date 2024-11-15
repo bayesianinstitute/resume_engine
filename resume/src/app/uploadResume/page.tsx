@@ -145,20 +145,10 @@ export default function ResumeViewer() {
   const handleDownloadResume = () => {
     if (selectedResume && selectedResume.resume) {
       // Normalize the file name by removing any leading "uploads/" or backslashes
-      const fileName = selectedResume.resume.replace(/^uploads[\\/]+/, "");
-      
-      const baseurl = process.env.NEXT_PUBLIC_BASE_URL; // e.g., 'http://127.0.0.1:5000/api/v1'
-  
-      if (!baseurl) {
-        return;
-      }
-  
-      // Construct the file URL without duplicating "uploads"
-      const fileUrl = `${baseurl.split('/api/v1')[0]}/uploads/${fileName}`;
-      console.log(fileUrl);
-  
+      const fileName = selectedResume.resume;
+    
       // Open the URL in a new tab to trigger download
-      window.open(fileUrl, "_blank");
+      window.open(fileName, "_blank");
     }
   };
   
