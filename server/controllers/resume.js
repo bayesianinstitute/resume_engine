@@ -13,7 +13,8 @@ import { Job } from "../models/jobTracker.js";
 import { MatchResult } from "../models/MatchResult.js";
 import { io } from "../socket.js";
 import ErrorHandler from "../utils/utitlity.js";
-
+import axios from "axios";
+import mongoose from "mongoose";
 import { User } from "../models/user.js";
 import {
   getLLMEvaluation,
@@ -279,14 +280,8 @@ export const matcher = TryCatch(async (req, res, next) => {
   }
 });
 
-export const matcherEnterprice = TryCatch(async (req, res, next) => {
-  const {
-    email,
-    resumeEntryIds,
-    jobIds,
-    selectallJob = false,
-    selectallResume = false,
-  } = req.body;
+export const matcherEnterprise = TryCatch(async (req, res, next) => {
+  const { email, resumeNames = [], selectallJob = true, selectallResume = false } = req.body;
 
   if (!email) {
     return next(new ErrorHandler("Email is required", 400));
@@ -301,126 +296,103 @@ export const matcherEnterprice = TryCatch(async (req, res, next) => {
   const fitThreshold = 70;
 
   try {
-    const jobDataArray = selectallJob
-      ? await Joblist.find()
-      : await Joblist.find({ _id: { $in: jobIds } });
+    let jobIds = [];
+    if (selectallJob) {
+      const jobResponse = await axios.get("http://127.0.0.1:5000/api/v1/job/jobs/ids");
+      if (jobResponse.data.success && jobResponse.data.data) {
+        jobIds = jobResponse.data.data;
+      } else {
+        return next(new ErrorHandler("Failed to fetch job IDs", 500));
+      }
+    }
 
+    const jobDataArray = await Joblist.find({ _id: { $in: jobIds } });
     if (!jobDataArray || jobDataArray.length === 0) {
       return next(new ErrorHandler("No jobs found.", 404));
     }
 
-    const resumeIdsToFetch = selectallResume
-      ? (await Resume.find()).flatMap((resume) =>
-          resume.resumes.map((r) => r._id.toString())
-        )
-      : resumeEntryIds;
+    const resumeDataArray = selectallResume
+      ? await Resume.find()
+      : await Resume.find({ "resumes.filename": { $in: resumeNames } });
 
-    if (!resumeIdsToFetch || resumeIdsToFetch.length === 0) {
-      return next(new ErrorHandler("No resumes found.", 404));
+    if (!resumeDataArray || resumeDataArray.length === 0) {
+      return next(new ErrorHandler("No resumes found with the given names.", 404));
     }
 
-    const existingMatches = await MatchResult.find({ userId });
     const results = [];
 
-    for (const resumeEntryId of resumeIdsToFetch) {
-      const resumeData = await Resume.findOne({ "resumes._id": resumeEntryId });
-      if (!resumeData) {
-        results.push({ resumeEntryId, error: "Resume entry not found." });
-        continue;
-      }
+    for (const resumeData of resumeDataArray) {
+      for (const resumeEntry of resumeData.resumes) {
+        if (!resumeNames.includes(resumeEntry.filename)) continue;
 
-      const resumeEntry = resumeData.resumes.find(
-        (r) => r._id.toString() === resumeEntryId
-      );
+        const resumeName = resumeEntry.filename;
+        const resumePath = resumeEntry.resume;
+        let localFilePath;
 
-      if (!resumeEntry) {
-        results.push({
-          resumeEntryId,
-          error: "Resume entry not found in the resumes array.",
-        });
-        continue;
-      }
+        if (resumePath.startsWith("https://")) {
+          // It's an S3 URL, download it locally
+          localFilePath = await downloadFileFromS3(resumePath, resumeName);
+        } else {
+          // Assume it's already a local file path
+          localFilePath = path.resolve(resumePath);
+        }
 
-      const resumeName = resumeEntry.filename || "Untitled Resume";
-      const resumePath = resumeEntry.resume;
-      const pdfLoader = new PDFLoader(path.join(process.cwd(), resumePath));
-      const resumeDocs = await pdfLoader.load();
-      const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
+        const pdfLoader = new PDFLoader(localFilePath);
+        const resumeDocs = await pdfLoader.load();
+        const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-      for (const jobData of jobDataArray) {
-        if (!jobData || !jobData._id) continue;
+        for (const jobData of jobDataArray) {
+          const existingMatch = await MatchResult.findOne({
+            userId,
+            "resumes.jobs.jobId": jobData._id,
+            "resumes.resumeName": resumeName,
+          });
 
-        const existingMatch = existingMatches.find((match) =>
-          match.resumes.some(
-            (r) =>
-              r.resumeEntryId.toString() === resumeEntryId.toString() &&
-              r.jobs.some((j) => j.jobId.toString() === jobData._id.toString())
-          )
-        );
-
-        if (existingMatch) {
-          // Include existing matches in the results array
-          const existingJobResult = existingMatch.resumes
-            .find(
-              (r) => r.resumeEntryId.toString() === resumeEntryId.toString()
-            )
-            ?.jobs.find((j) => j.jobId.toString() === jobData._id.toString());
-
-          if (existingJobResult) {
+          if (existingMatch) {
             results.push({
               resumeName,
               jobTitle: jobData.title,
               jobCompany: jobData.company,
-              evaluationResponse: existingJobResult.evaluationResponse,
+              evaluationResponse: existingMatch.resumes.jobs[0].evaluationResponse,
             });
-            continue; // Skip LLM evaluation for existing match
+            continue;
           }
-        }
 
-        await waitUntilAvailable();
-        checkAndResetApiRequestCount();
+          await waitUntilAvailable();
+          checkAndResetApiRequestCount();
 
-        // Call LLM to evaluate the match
-        const {
-          evaluationText,
-          compositeScore,
-          scores,
-          recommendation,
-          isfit,
-        } = await getLLMEvaluation(
-          resumeText,
-          jobData.description,
-          fitThreshold
-        );
-
-        const resultMessage =
-          compositeScore >= fitThreshold
-            ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
-            : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`;
-
-        const newJobResult = {
-          resumeName,
-          jobId: jobData._id,
-          jobTitle: jobData.title,
-          jobCompany: jobData.company,
-          matchResult: resultMessage,
-          evaluationResponse: {
-            scores,
+          const {
+            evaluationText,
             compositeScore,
+            scores,
             recommendation,
             isfit,
-          },
-        };
+          } = await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
 
-        results.push(newJobResult);
+          const newJobResult = {
+            resumeName,
+            jobId: jobData._id,
+            jobTitle: jobData.title,
+            jobCompany: jobData.company,
+            matchResult:
+              compositeScore >= fitThreshold
+                ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
+                : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`,
+            evaluationResponse: { scores, compositeScore, recommendation, isfit },
+          };
+
+          results.push(newJobResult);
+        }
+
+        // Cleanup: Remove downloaded file
+        if (resumePath.startsWith("https://")) {
+          fs.unlinkSync(localFilePath);
+        }
       }
     }
 
     if (results.length === 0) {
-      return res.json({
-        message: "No match results found.",
-        success: false,
-      });
+      return res.json({ message: "No match results found.", success: false });
     }
 
     const csvData = results.map((jobResult) => ({
@@ -832,3 +804,26 @@ export const getStatusCount = async (req, res) => {
       .json({ message: "Error retrieving job status count", error });
   }
 };
+
+export const getAllJobIds = TryCatch(async (req, res, next) => {
+  try {
+    // Fetch only job IDs (_id) from the Joblist collection
+    const jobs = await Joblist.find({}, "_id");
+
+    if (!jobs || jobs.length === 0) {
+      return next(new ErrorHandler("No jobs found", 404));
+    }
+
+    // Extract and return the array of job IDs
+    const jobIds = jobs.map(job => job._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Job IDs retrieved successfully",
+      data: jobIds
+    });
+  } catch (error) {
+    console.error("Error fetching job IDs:", error);
+    next(new ErrorHandler("An error occurred while fetching job IDs", 500));
+  }
+});
