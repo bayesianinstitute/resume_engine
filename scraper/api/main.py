@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from jobspy import scrape_jobs
 import pandas as pd
 from typing import List, Dict, Optional
@@ -8,12 +8,32 @@ import urllib.parse
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 import uuid
-from io import StringIO
-from dotenv import load_dotenv
-load_dotenv() 
-
+from tempfile import NamedTemporaryFile
 import os
+import logging
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+# Validate environment variables
+ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
+SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+REGION = os.getenv("AWS_REGION")
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+
+if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME]):
+    logging.error("Environment variables must be specified in the environment")
+    raise ValueError("AWS environment variables are not set properly.")
+
+ 
+# S3 Manager
 class S3Manager:
     def __init__(self, access_key: str, secret_key: str, region: str, bucket_name: str):
         self.s3_client = boto3.client(
@@ -23,44 +43,36 @@ class S3Manager:
             region_name=region,
         )
         self.bucket_name = bucket_name
-        # self.region=REGION
-        self.regionBUCKET_NAME
-    def upload_csv(self, dataframe, file_name: str) -> str:
+        self.region = region
+
+    def upload_csv(self, dataframe: pd.DataFrame, file_name: str) -> str:
         try:
-            # Generate a unique file name if not provided
-            if not file_name:
-                file_name = f"{uuid.uuid4()}.csv"
-
-            # Save DataFrame to a temporary CSV file
-            temp_file = f"/tmp/{file_name}"
-            dataframe.to_csv(temp_file, index=False)
-
-            # Upload to S3 with public-read ACL
-            self.s3_client.upload_file(
-                temp_file,
-                self.bucket_name,
-                f"scrape/{file_name}",
-            )
-
-            # Construct the public URL
-            public_url = f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/scrape/{file_name}"
-            return public_url
-
+            with NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+                dataframe.to_csv(temp_file.name, index=False)
+                object_name = f"scrape/{file_name}"
+                self.s3_client.upload_file(
+                    temp_file.name,
+                    self.bucket_name,
+                    object_name,
+                    ExtraArgs={"ContentType": "text/csv"}
+                )
+                public_url = f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{object_name}"
+                logging.info(f"File uploaded to S3: {public_url}")
+                return public_url
         except (NoCredentialsError, PartialCredentialsError) as e:
-            print(f"S3 credential error: {e}")
-            raise
+            logging.error(f"S3 credential error: {e}")
+            raise HTTPException(status_code=500, detail="S3 credentials error.")
         except Exception as e:
-            print(f"An error occurred while uploading to S3: {e}")
-            raise
+            logging.error(f"Error uploading to S3: {e}")
+            raise HTTPException(status_code=500, detail="Failed to upload to S3.")
+        finally:
+            if os.path.exists(temp_file.name):
+                os.remove(temp_file.name)
+                logging.info("Temporary file deleted.")
 
 
-ACCESS_KEY =os.getenv("AWS_ACCESS_KEY_ID")
-
-SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-
-REGION =  os.getenv("AWS_REGION") 
-
-BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+# FastAPI Application
+app = FastAPI()
 
 # S3 Manager instance
 s3_manager = S3Manager(
@@ -70,8 +82,8 @@ s3_manager = S3Manager(
     bucket_name=BUCKET_NAME,
 )
 
-app = FastAPI()
 
+# Pydantic Models
 class JobResponseModel(BaseModel):
     title: str
     location: str
@@ -81,103 +93,49 @@ class JobResponseModel(BaseModel):
     job_url: str
     company: str
 
-class JobSearchResponseModel(BaseModel):
-    total_jobs: int  # New field for total jobs scraped
-    jobs: List[JobResponseModel]  # List of job response models
 
+class JobSearchResponseModel(BaseModel):
+    total_jobs: int
+    jobs: List[JobResponseModel]
+
+
+class S3UploadResponseModel(BaseModel):
+    message: str
+    success: bool
+    url: Optional[str] = None
+
+
+# Helper Functions
+def build_search_query(
+    role: str,
+    required_skills: Optional[List[str]],
+    excluded_terms: Optional[List[str]],
+) -> str:
+    role_exact = f'"{role.lower()}"'
+    skills_query = " OR ".join(required_skills) if required_skills else ""
+    exclusions_query = " ".join(f"-{term}" for term in excluded_terms) if excluded_terms else ""
+    return f"{role_exact} {skills_query} {exclusions_query}"
+
+
+# Endpoints
 @app.get("/jobs/", response_model=JobSearchResponseModel)
 async def get_jobs(
-    role: Optional[str] = "software engineer",
-    location: Optional[str] = "San Francisco, CA",
-    hours: Optional[int] = 72,
-    include_description: Optional[bool] = False,
-    max_result_wanted: Optional[int] = 20,
-    required_skills: Optional[List[str]] = None,
-    excluded_terms: Optional[List[str]] = None,
-    country:Optional[str]="USA"
+    role: str = Query("software engineer", description="Job role to search for"),
+    location: str = Query("San Francisco, CA", description="Job location"),
+    hours: int = Query(72, description="How recent the jobs should be (in hours)"),
+    include_description: bool = Query(False, description="Include job descriptions"),
+    max_result_wanted: int = Query(20, description="Max number of jobs to fetch"),
+    required_skills: Optional[List[str]] = Query(None, description="Skills required for the job"),
+    excluded_terms: Optional[List[str]] = Query(None, description="Terms to exclude from results"),
+    country: str = Query("USA", description="Country for job search"),
 ):
-    role_decoded = urllib.parse.unquote(role)
-    print(role_decoded)
-    print(role,location,hours,include_description,country)
     try:
-        # Construct Indeed search term with structured query
-        role_exact = f'"{role_decoded.lower()}"'  # Exact match for the role
-        skills_query = " OR ".join(required_skills) if required_skills else ""
-        exclusions_query = " ".join(f"-{term}" for term in excluded_terms) if excluded_terms else ""
-        
-        # Build the structured query string
-        indeed_search_term = f'{role_exact} {skills_query} {exclusions_query}'
-
-        # Print the query for debugging
-        print(f"Indeed search term: {indeed_search_term}")
-
-        # Site list for scraping
-        site_name = ["indeed", "linkedin", "zip_recruiter", "glassdoor", "google"]
-        
-        # Scrape jobs using constructed Indeed search term
-        jobs = scrape_jobs(
-            site_name=["indeed"],
-            search_term=indeed_search_term,
-            google_search_term=f"{role} jobs near {location} since {hours} hours ago",
-            location=location,
-            results_wanted=max_result_wanted,
-            hours_old=hours,
-            country=country,
-            linkedin_fetch_description=include_description,
-            
-            
-        )
-
-        # Debug output
-        print(f"Found {len(jobs)} jobs")
-
-        if len(jobs) == 0:
-            return {
-                "total_jobs": 0,
-                "jobs": []
-            }
-
-        # Process date and filter columns
-        jobs['date_posted'] = jobs['date_posted'].apply(lambda x: str(x) if not pd.isna(x) else "")
-        filtered_jobs = jobs[['title', 'location', 'job_level', 'date_posted', 'description', 'job_url', 'company']]
-        response_jobs = filtered_jobs.to_dict(orient='records')
-
-        return {
-            "total_jobs": len(response_jobs),
-            "jobs": response_jobs
-        }
-
-    except ValidationError as e:
-        print(f"Validation Error: {e}")
-        return {"error": "Data validation failed.  See logs for details."}, 500  # Return 500 error
-    except Exception as e:  # Catch other potential errors
-        print(f"An unexpected error occurred: {e}")
-        return {"error": "An unexpected error occurred.  See logs for details."}, 500
-    
-    
-@app.get("/jobss3/", response_model=Dict[str, str])
-async def get_jobs(
-    role: Optional[str] = "software engineer",
-    location: Optional[str] = "San Francisco, CA",
-    hours: Optional[int] = 72,
-    include_description: Optional[bool] = False,
-    max_result_wanted: Optional[int] = 20,
-    required_skills: Optional[List[str]] = None,
-    excluded_terms: Optional[List[str]] = None,
-    country: Optional[str] = "USA"
-):
-    role_decoded = urllib.parse.unquote(role)
-    print(role_decoded)
-
-    try:
-        role_exact = f'"{role_decoded.lower()}"'
-        skills_query = " OR ".join(required_skills) if required_skills else ""
-        exclusions_query = " ".join(f"-{term}" for term in excluded_terms) if excluded_terms else ""
-        indeed_search_term = f'{role_exact} {skills_query} {exclusions_query}'
+        role_decoded = urllib.parse.unquote(role)
+        search_query = build_search_query(role_decoded, required_skills, excluded_terms)
 
         jobs = scrape_jobs(
             site_name=["indeed"],
-            search_term=indeed_search_term,
+            search_term=search_query,
             google_search_term=f"{role} jobs near {location} since {hours} hours ago",
             location=location,
             results_wanted=max_result_wanted,
@@ -186,27 +144,60 @@ async def get_jobs(
             linkedin_fetch_description=include_description,
         )
 
-        if len(jobs) == 0:
-            return {"message": "No jobs found."}
+        if jobs.empty:
+            return {"total_jobs": 0, "jobs": []}
 
-        # Process DataFrame
-        jobs['date_posted'] = jobs['date_posted'].apply(lambda x: str(x) if not pd.isna(x) else "")
-        filtered_jobs = jobs[['title', 'location', 'job_level', 'date_posted', 'description', 'job_url', 'company']]
+        jobs["date_posted"] = jobs["date_posted"].apply(lambda x: str(x) if not pd.isna(x) else "")
+        filtered_jobs = jobs[
+            ["title", "location", "job_level", "date_posted", "description", "job_url", "company"]
+        ]
+        response_jobs = filtered_jobs.to_dict(orient="records")
 
-        # Save as CSV to S3
+        return {"total_jobs": len(response_jobs), "jobs": response_jobs}
+
+    except Exception as e:
+        logging.error(f"Error fetching jobs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch jobs.")
+
+
+@app.get("/jobs-s3/", response_model=S3UploadResponseModel)
+async def get_jobs_s3(
+    role: str = Query("software engineer", description="Job role to search for"),
+    location: str = Query("San Francisco, CA", description="Job location"),
+    hours: int = Query(72, description="How recent the jobs should be (in hours)"),
+    include_description: bool = Query(False, description="Include job descriptions"),
+    max_result_wanted: int = Query(20, description="Max number of jobs to fetch"),
+    required_skills: Optional[List[str]] = Query(None, description="Skills required for the job"),
+    excluded_terms: Optional[List[str]] = Query(None, description="Terms to exclude from results"),
+    country: str = Query("USA", description="Country for job search"),
+):
+    try:
+        role_decoded = urllib.parse.unquote(role)
+        search_query = build_search_query(role_decoded, required_skills, excluded_terms)
+
+        jobs = scrape_jobs(
+            site_name=["indeed"],
+            search_term=search_query,
+            google_search_term=f"{role} jobs near {location} since {hours} hours ago",
+            location=location,
+            results_wanted=max_result_wanted,
+            hours_old=hours,
+            country=country,
+            linkedin_fetch_description=include_description,
+        )
+
+        if jobs.empty:
+            return {"message": "No jobs found.", "success": False}
+
+        jobs["date_posted"] = jobs["date_posted"].apply(lambda x: str(x) if not pd.isna(x) else "")
+        filtered_jobs = jobs[
+            ["title", "location", "job_level", "date_posted", "description", "job_url", "company"]
+        ]
         file_name = f"jobs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         presigned_url = s3_manager.upload_csv(filtered_jobs, file_name)
 
-        return {
-            "message": "File successfully uploaded to S3",
-            "success": True,
-            "url": presigned_url
-        }
+        return {"message": "File successfully uploaded to S3.", "success": True, "url": presigned_url}
 
-    except ValidationError as e:
-        print(f"Validation Error: {e}")
-        return {"error": "Data validation failed. See logs for details."}, 500
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        return {"error": "An unexpected error occurred. See logs for details."}, 500
-
+        logging.error(f"Error uploading jobs to S3: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload jobs to S3.")
