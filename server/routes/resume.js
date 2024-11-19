@@ -5,12 +5,13 @@ import { getLinkedInJobs } from '../controllers/linkedinController.js';
 import { generatePreparationResources } from '../controllers/interviewController.js';
 import { getJobs, createJob, updateJobStatus,deleteJob } from '../controllers/jobTrackerController.js';
 import { verifyTokenMiddleware } from '../middleware/auth.js'; 
+import { verifyApiKey } from "../middleware/verifyApiKey.js"; 
 
 const router = express.Router();
 const upload = multer();
 
 router.post('/matcher', matcher);
-router.post('/matcherE', matcherEnterprise);
+router.post('/matcherE',verifyApiKey, matcherEnterprise);
 router.get("/getResumeMatchResults", getResumeMatchResults);
 router.post('/stats', upload.single('resume'),verifyTokenMiddleware, stats);
 router.get('/getAllResumes', getAllResumes);

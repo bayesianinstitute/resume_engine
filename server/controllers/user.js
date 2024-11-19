@@ -1,4 +1,5 @@
 import { PendingUser, User } from "../models/user.js";
+import { EnterpriseUser } from "../models/enterprise.js";
 import { TryCatch } from "../middleware/error.js";
 import ErrorHandler from "../utils/utitlity.js";
 import { generateToken } from "../middleware/auth.js";
@@ -394,5 +395,32 @@ export const updateProfile = TryCatch(async (req, res, next) => {
     success: true,
     message: "Profile updated successfully",
     data: updatedUser,
+  });
+});
+
+export const addEnterpriseUser = TryCatch(async (req, res, next) => {
+  const { email, name, phone } = req.body;
+
+  // Validate required fields
+  if (!email || !name) {
+    return next(new ErrorHandler("Email and name are required", 400));
+  }
+
+  // Check if user already exists
+  const existingUser = await EnterpriseUser.findOne({ email });
+  if (existingUser) {
+    return next(new ErrorHandler("User already exists with this email", 409));
+  }
+
+  // Create and save the user
+  const newUser = await EnterpriseUser.create({ email, name, phone });
+
+  // Convert Mongoose document to plain object
+  const userResponse = newUser.toObject();
+
+  res.status(201).json({
+    success: true,
+    message: "User created successfully",
+    data: userResponse,
   });
 });
