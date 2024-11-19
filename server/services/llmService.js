@@ -84,6 +84,7 @@ export async function getLLMEvaluation(resumeText, jobDescription, fitThreshold)
         },
         compositeScore: 0,
         recommendation: null,
+        isfit: false,
       };
     }
   }

@@ -40,29 +40,32 @@ const convertToCSV = (data) => {
 
 
 
-const uploadCSVToS3 = async (csvData, fileName) => {
-  // Get the current directory path in an ES module environment
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+const uploadCSVToS3 = async (csvFilePath, fileName) => {
+  try {
+    // Ensure file exists before uploading
+    if (!fs.existsSync(csvFilePath)) {
+      throw new Error(`File does not exist at path: ${csvFilePath}`);
+    }
 
-  // Save CSV to a temporary file
-  const csvFilePath = path.join("/tmp", `${fileName}.csv`);
+    const s3Params = {
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: `match_results/${fileName}`,
+      Body: fs.createReadStream(csvFilePath),
+      ContentType: "text/csv",
+    };
 
-  const s3Params = {
-    Bucket: process.env.S3_BUCKET_NAME,
-    Key: `match_results/${fileName}.csv`,
-    Body: fs.createReadStream(csvFilePath),
-    ContentType: "text/csv",
-  };
+    const uploadResult = await s3.upload(s3Params).promise();
 
-  const uploadResult = await s3.upload(s3Params).promise();
+    console.log("File uploaded successfully:", uploadResult.Location);
 
-  // Clean up the temporary file after upload
-  fs.unlinkSync(csvFilePath);
+    // Optionally, clean up the temporary file after upload
+    fs.unlinkSync(csvFilePath);
 
-  console.log(uploadResult.Location);
-
-  return uploadResult.Location;
+    return uploadResult.Location;
+  } catch (error) {
+    console.error("Error uploading to S3:", error);
+    throw new Error("Error uploading CSV to S3");
+  }
 };
 
 // New function to upload a PDF to S3

@@ -1,6 +1,0 @@
-"Resume Name","Job Title","Company Name","Isfit","Match Result","Composite Score","Relevance","Skills","Experience","Presentation","Recommendation"
-"resume.pdf","AI/ML Engineer","Calyptus",true,"Good fit for job AI/ML Engineer with a score of 78.65%.",78.65,80,80,75,85,"Highlight experience with LLMs and NLP tasks more prominently in the resume."
-"resume.pdf","Graduate Security Engineer","The Software Institute",,"Not a good fit for job Graduate Security Engineer with a score of 0%.",0,0,0,0,0,
-"resume.pdf","Associate - Software and Data Engineer: Corporate Governance","BlackRock",,"Not a good fit for job Associate - Software and Data Engineer: Corporate Governance with a score of 0%.",0,0,0,0,0,
-"resume.pdf","Data Engineer I","Condé Nast",true,"Good fit for job Data Engineer I with a score of 72.75%.",72.75,75,80,70,85,"Highlight experience with large-scale data processing frameworks like Spark in a more prominent way."
-"resume.pdf","Data Engineer, Med/Machine","Columbia University",,"Not a good fit for job Data Engineer, Med/Machine with a score of 0%.",0,0,0,0,0,

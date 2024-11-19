@@ -28,6 +28,10 @@ import {
   downloadFileFromS3,
 } from "../utils/s3Upload.js";
 
+import { promisify } from 'util';
+
+const writeFileAsync = promisify(fs.writeFile);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -281,46 +285,49 @@ export const matcher = TryCatch(async (req, res, next) => {
 });
 
 export const matcherEnterprise = TryCatch(async (req, res, next) => {
-  const { email, resumeNames = [], selectallJob = true, selectallResume = false } = req.body;
+  const {
+    email,
+    resumeNames = [],
+    jobIds = [],
+    selectallJob = false,
+    selectallResume = false,
+  } = req.body;
 
   if (!email) {
     return next(new ErrorHandler("Email is required", 400));
   }
 
+  // Fetch the user by email
   const user = await User.findOne({ email });
   if (!user) {
     return next(new ErrorHandler("User not found", 404));
   }
 
+  // Determine the jobs to be processed
+  const jobDataArray = selectallJob
+    ? await Joblist.find()
+    : await Joblist.find({ _id: { $in: jobIds } });
+
+  if (!jobDataArray || jobDataArray.length === 0) {
+    return next(new ErrorHandler("No jobs found.", 404));
+  }
+
+  // Determine the resumes to be processed
+  const resumeDataArray = selectallResume
+    ? await Resume.find()
+    : await Resume.find({ "resumes.filename": { $in: resumeNames } });
+
+  if (!resumeDataArray || resumeDataArray.length === 0) {
+    return next(
+      new ErrorHandler("No resumes found with the given names.", 404)
+    );
+  }
+
   const userId = user.id;
   const fitThreshold = 70;
+  const results = [];
 
   try {
-    let jobIds = [];
-    if (selectallJob) {
-      const jobResponse = await axios.get("http://127.0.0.1:5000/api/v1/job/jobs/ids");
-      if (jobResponse.data.success && jobResponse.data.data) {
-        jobIds = jobResponse.data.data;
-      } else {
-        return next(new ErrorHandler("Failed to fetch job IDs", 500));
-      }
-    }
-
-    const jobDataArray = await Joblist.find({ _id: { $in: jobIds } });
-    if (!jobDataArray || jobDataArray.length === 0) {
-      return next(new ErrorHandler("No jobs found.", 404));
-    }
-
-    const resumeDataArray = selectallResume
-      ? await Resume.find()
-      : await Resume.find({ "resumes.filename": { $in: resumeNames } });
-
-    if (!resumeDataArray || resumeDataArray.length === 0) {
-      return next(new ErrorHandler("No resumes found with the given names.", 404));
-    }
-
-    const results = [];
-
     for (const resumeData of resumeDataArray) {
       for (const resumeEntry of resumeData.resumes) {
         if (!resumeNames.includes(resumeEntry.filename)) continue;
@@ -329,11 +336,10 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
         const resumePath = resumeEntry.resume;
         let localFilePath;
 
+        // Handle S3 or local file paths
         if (resumePath.startsWith("https://")) {
-          // It's an S3 URL, download it locally
           localFilePath = await downloadFileFromS3(resumePath, resumeName);
         } else {
-          // Assume it's already a local file path
           localFilePath = path.resolve(resumePath);
         }
 
@@ -341,7 +347,6 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
         const resumeDocs = await pdfLoader.load();
         const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
-        
         for (const jobData of jobDataArray) {
           const existingMatch = await MatchResult.findOne({
             userId,
@@ -354,7 +359,8 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
               resumeName,
               jobTitle: jobData.title,
               jobCompany: jobData.company,
-              evaluationResponse: existingMatch.resumes.jobs[0].evaluationResponse,
+              evaluationResponse:
+                existingMatch.resumes.jobs[0].evaluationResponse,
             });
             continue;
           }
@@ -368,7 +374,11 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
             scores,
             recommendation,
             isfit,
-          } = await getLLMEvaluation(resumeText, jobData.description, fitThreshold);
+          } = await getLLMEvaluation(
+            resumeText,
+            jobData.description,
+            fitThreshold
+          );
 
           const newJobResult = {
             resumeName,
@@ -379,24 +389,28 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
               compositeScore >= fitThreshold
                 ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
                 : `Not a good fit for job ${jobData.title} with a score of ${compositeScore}%.`,
-            evaluationResponse: { scores, compositeScore, recommendation, isfit },
+            evaluationResponse: {
+              scores,
+              compositeScore,
+              recommendation,
+              isfit,
+            },
           };
 
           results.push(newJobResult);
-         
         }
 
         // Cleanup: Remove downloaded file
-        if (resumePath.startsWith("https://")) {
-          fs.unlinkSync(localFilePath);
-        }
+        // if (resumePath.startsWith("https://")) {
+        //   fs.unlinkSync(localFilePath);
+        // }
       }
     }
 
     if (results.length === 0) {
       return res.json({ message: "No match results found.", success: false });
     }
-    console.log(results);
+
     const csvData = results.map((jobResult) => ({
       "Resume Name": jobResult.resumeName,
       "Job Title": jobResult.jobTitle,
@@ -412,30 +426,25 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
     }));
 
     const csvContent = convertToCSV(csvData);
-    const fileName = `match_results_${Date.now()}`;
-    // Define the directory under root (or specify your desired location)
-    const rootDir = path.resolve('/');
-    const targetDir = path.join(rootDir, 'match_results'); // Replace 'match_results' with your desired folder name
-
-    // Ensure the directory exists
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-      console.log(`Directory created at ${targetDir}`);
-    }
-
+    // Define paths
+    const rootDir = path.resolve(__dirname, "../uploads/");
+    const targetDir = path.join(rootDir, "match_results");
+    const fileName = `match_results_${Date.now()}.csv`;
     const filePath = path.join(targetDir, fileName);
 
-    // Write the CSV content to a file
-    fs.writeFile(filePath, csvContent, 'utf8', (err) => {
-      if (err) {
-        console.error('Error writing file:', err);
-      } else {
-        console.log(`File saved successfully as ${filePath}`);
-      }
-    });
+    // Ensure directory exists
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
 
-    const s3FileUrl = await uploadCSVToS3(csvContent, fileName);
-    console
+    // Write CSV locally
+    await writeFileAsync(filePath, csvContent, "utf8");
+    console.log(`File saved successfully at ${filePath}`);
+
+    // Upload CSV to S3
+    const s3FileUrl = await uploadCSVToS3(filePath, fileName);
+    // const s3FileUrl = await uploadCSVToS3(filePath, fileName);
+
     return res.json({ message: "Match result", success: true, s3FileUrl });
   } catch (error) {
     console.error("Error processing resume match:", error);
@@ -830,23 +839,30 @@ export const getStatusCount = async (req, res) => {
 
 export const getAllJobIds = TryCatch(async (req, res, next) => {
   try {
-    // Fetch only job IDs (_id) from the Joblist collection
-    const jobs = await Joblist.find({}, "_id").limit(5);
+    // Fetch job details along with the job ID from the Joblist collection
+
+    const jobs = await Joblist.find({}, "_id title description url");
 
     if (!jobs || jobs.length === 0) {
       return next(new ErrorHandler("No jobs found", 404));
     }
 
-    // Extract and return the array of job IDs
-    const jobIds = jobs.map(job => job._id);
+    // Return the job details along with job IDs
+    const jobDetails = jobs.map((job) => ({
+      jobId: job._id,
+      jobTitle: job.title,
+      jobDescription: job.description,
+      jobUrl: job.url || "No URL provided", // Provide a default URL message if not available
+    }));
 
     res.status(200).json({
       success: true,
-      message: "Job IDs retrieved successfully",
-      data: jobIds
+      message: "Job IDs and details retrieved successfully",
+      data: jobDetails,
     });
   } catch (error) {
-    console.error("Error fetching job IDs:", error);
-    next(new ErrorHandler("An error occurred while fetching job IDs", 500));
+    console.error("Error fetching job details:", error);
+    next(new ErrorHandler("An error occurred while fetching job details", 500));
   }
 });
+
