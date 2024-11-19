@@ -4,3 +4,4 @@ pandas
 uvicorn
 boto
 python-dotenv
+APScheduler

@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from jobspy import scrape_jobs
 import pandas as pd
 from typing import List, Dict, Optional
@@ -8,6 +10,8 @@ import urllib.parse
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 import uuid
+
+import csv
 from tempfile import NamedTemporaryFile
 import os
 import logging
@@ -74,6 +78,9 @@ class S3Manager:
 # FastAPI Application
 app = FastAPI()
 
+# Scheduler setup
+scheduler = BackgroundScheduler()
+
 # S3 Manager instance
 s3_manager = S3Manager(
     access_key=ACCESS_KEY,
@@ -81,6 +88,66 @@ s3_manager = S3Manager(
     region=REGION,
     bucket_name=BUCKET_NAME,
 )
+
+
+# Job Scraping Function
+def scrape_and_upload_jobs(city: str):
+    try:
+        logging.info(f"Scraping jobs for {city}...")
+        job_role="software engineer"
+        # Example of scraping jobs for a city
+        jobs = scrape_jobs(
+            site_name=["indeed"],
+            search_term=job_role,
+            google_search_term=f"software engineer jobs near {city} 72 hours ago",
+            location=city,
+            results_wanted=20,
+            hours_old=72,
+            country="USA",
+            linkedin_fetch_description=False
+        )
+
+        if jobs.empty:
+            logging.info(f"No jobs found for {city}.")
+            return
+
+        jobs["date_posted"] = jobs["date_posted"].apply(lambda x: str(x) if not pd.isna(x) else "")
+        filtered_jobs = jobs[["title", "location", "job_level", "date_posted", "description", "job_url", "company"]]
+        
+            # Get current datetime and format it
+        current_datetime = datetime.now()
+        timestamp = current_datetime.strftime('%Y/%m/%d_%H%M/')
+        file_name = f"{city}/{job_role}/jobs_{timestamp}{current_datetime.strftime('%Y%m%d_%H%M%S')}.csv"
+        presigned_url = s3_manager.upload_csv(filtered_jobs, file_name)
+
+        logging.info(f"Jobs for {city} uploaded to S3: {presigned_url}")
+    except Exception as e:
+        logging.error(f"Error scraping and uploading jobs for {city}: {e}")
+
+
+# Read all City
+def read_cities_from_csv(file_path):
+    cities = []
+    with open(file_path, mode='r', newline='') as file:
+        csv_reader = csv.DictReader(file)
+        for row in csv_reader:
+            # Concatenate city and state
+            cities.append(f"{row['City']}, {row['State']}")
+    return cities
+# Scheduler Job
+def scheduled_job():
+    # Read cities from CSV file
+    cities = read_cities_from_csv('cities.csv')  # Path to your CSV file
+    for city in cities:
+        scrape_and_upload_jobs(city)
+
+# Start the scheduler on app startup
+@app.on_event("startup")
+async def startup_event():
+    # Schedule the job to run every 24 hours
+    scheduler.add_job(scheduled_job, 'interval', hours=24, next_run_time=datetime.now())
+    scheduler.start()
+    logging.info("Scheduler started.")
 
 
 # Pydantic Models
@@ -201,3 +268,9 @@ async def get_jobs_s3(
     except Exception as e:
         logging.error(f"Error uploading jobs to S3: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload jobs to S3.")
+    
+# Shutdown the scheduler on app shutdown
+@app.on_event("shutdown")
+async def shutdown_event():
+    scheduler.shutdown()
+    logging.info("Scheduler stopped.")
