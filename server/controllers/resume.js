@@ -341,6 +341,7 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
         const resumeDocs = await pdfLoader.load();
         const resumeText = resumeDocs.map((doc) => doc.pageContent).join(" ");
 
+        
         for (const jobData of jobDataArray) {
           const existingMatch = await MatchResult.findOne({
             userId,
@@ -382,6 +383,7 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
           };
 
           results.push(newJobResult);
+         
         }
 
         // Cleanup: Remove downloaded file
@@ -394,7 +396,7 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
     if (results.length === 0) {
       return res.json({ message: "No match results found.", success: false });
     }
-
+    console.log(results);
     const csvData = results.map((jobResult) => ({
       "Resume Name": jobResult.resumeName,
       "Job Title": jobResult.jobTitle,
@@ -411,8 +413,29 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
 
     const csvContent = convertToCSV(csvData);
     const fileName = `match_results_${Date.now()}`;
-    const s3FileUrl = await uploadCSVToS3(csvContent, fileName);
+    // Define the directory under root (or specify your desired location)
+    const rootDir = path.resolve('/');
+    const targetDir = path.join(rootDir, 'match_results'); // Replace 'match_results' with your desired folder name
 
+    // Ensure the directory exists
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+      console.log(`Directory created at ${targetDir}`);
+    }
+
+    const filePath = path.join(targetDir, fileName);
+
+    // Write the CSV content to a file
+    fs.writeFile(filePath, csvContent, 'utf8', (err) => {
+      if (err) {
+        console.error('Error writing file:', err);
+      } else {
+        console.log(`File saved successfully as ${filePath}`);
+      }
+    });
+
+    const s3FileUrl = await uploadCSVToS3(csvContent, fileName);
+    console
     return res.json({ message: "Match result", success: true, s3FileUrl });
   } catch (error) {
     console.error("Error processing resume match:", error);
@@ -808,7 +831,7 @@ export const getStatusCount = async (req, res) => {
 export const getAllJobIds = TryCatch(async (req, res, next) => {
   try {
     // Fetch only job IDs (_id) from the Joblist collection
-    const jobs = await Joblist.find({}, "_id");
+    const jobs = await Joblist.find({}, "_id").limit(5);
 
     if (!jobs || jobs.length === 0) {
       return next(new ErrorHandler("No jobs found", 404));

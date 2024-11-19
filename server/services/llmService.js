@@ -88,6 +88,8 @@ export async function getLLMEvaluation(resumeText, jobDescription, fitThreshold)
     }
   }
 
+
+
 export async function getLLMEvaluationStats(resumeText) {
   const prompt = `
     You are an expert career coach and resume evaluator. Based on the following resume, analyze the person's strengths, weaknesses, and provide numeric skill proficiency levels (out of 100) for technical skills mentioned in the resume. Provide the analysis based on the following criteria:
