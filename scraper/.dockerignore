@@ -1,0 +1,46 @@
+# Ignore the Python bytecode files
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+
+# Ignore virtual environment directories
+venv/
+env/
+.venv/
+.env/
+
+# Ignore Docker-related files
+.dockerignore
+Dockerfile
+
+# Ignore .git directories and files
+.git/
+.gitignore
+
+# Ignore IDE/editor configurations
+.vscode/
+.idea/
+
+# Ignore test directories and files
+tests/
+*.log
+
+# Ignore sensitive environment files
+.env
+
+# Ignore S3 or database config files if not needed
+s3_config.json
+database_config.json
+
+# Ignore static files if not relevant to the build context
+static/
+
+# Ignore FastAPI app's log directory (e.g., log files)
+logs/
+
+# Ignore build artifacts or temporary files
+*.swp
+*.bak
+*.tmp
+*.dist-info

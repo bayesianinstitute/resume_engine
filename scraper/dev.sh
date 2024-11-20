@@ -6,4 +6,4 @@
 #     echo "Conda environment 'jobspy' is already activated."
 # fi
 
-uvicorn api.main:app --reload
+uvicorn app.main:app --reload
