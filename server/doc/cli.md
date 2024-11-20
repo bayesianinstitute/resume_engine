@@ -7,7 +7,7 @@
 
 #### **Request**:
 ```bash
-curl -X GET http://127.0.0.1:5000/api/v1/jobs/ids \
+curl -X GET http://127.0.0.1:5000/api/v1/job/jobs/ids \
   -H "Content-Type: application/json" \
   -H "API-Key: <your-api-key>"
 ```

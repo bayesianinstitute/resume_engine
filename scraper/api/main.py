@@ -91,18 +91,18 @@ s3_manager = S3Manager(
 
 
 # Job Scraping Function
-def scrape_and_upload_jobs(city: str):
+def scrape_and_upload_jobs(city: str,job_role="software engineer",results_wanted=20,hours_old=24):
     try:
         logging.info(f"Scraping jobs for {city}...")
-        job_role="software engineer"
+
         # Example of scraping jobs for a city
         jobs = scrape_jobs(
             site_name=["indeed"],
             search_term=job_role,
-            google_search_term=f"software engineer jobs near {city} 72 hours ago",
+            google_search_term=f"{job_role} jobs near {city} 72 hours ago",
             location=city,
-            results_wanted=20,
-            hours_old=72,
+            results_wanted=results_wanted,
+            hours_old=hours_old,
             country="USA",
             linkedin_fetch_description=False
         )
@@ -138,14 +138,25 @@ def read_cities_from_csv(file_path):
 def scheduled_job():
     # Read cities from CSV file
     cities = read_cities_from_csv('cities.csv')  # Path to your CSV file
+    # cities=["Los Angeles"]
+    DATA_ROLES = [
+    "data scientist",
+    "data analyst",
+    "machine learning engineer",
+    "data engineer",
+    "AI researcher"
+]
+
     for city in cities:
-        scrape_and_upload_jobs(city)
+        for role in DATA_ROLES:
+            scrape_and_upload_jobs(city,role)
 
 # Start the scheduler on app startup
 @app.on_event("startup")
 async def startup_event():
     # Schedule the job to run every 24 hours
     scheduler.add_job(scheduled_job, 'interval', hours=24, next_run_time=datetime.now())
+
     scheduler.start()
     logging.info("Scheduler started.")
 

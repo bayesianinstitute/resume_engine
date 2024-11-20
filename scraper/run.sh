@@ -1,9 +1,6 @@
-# Check if the conda environment is activated
-# if [ "$CONDA_DEFAULT_ENV" != "jobspy" ]; then
-#     echo "Activating conda environment: jobspy"
-#     conda activate jobspy
-# else
-#     echo "Conda environment 'jobspy' is already activated."
-# fi
 
-uvicorn api.main:app --reload
+
+sudo docker build --no-cache -t resume-scraper .
+
+
+sudo docker run -d -p 8000:8000 resume-scraper 
