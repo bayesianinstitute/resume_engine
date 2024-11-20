@@ -2,6 +2,7 @@ import { Joblist } from "../models/jobModel.js";
 import { TryCatch } from "../middleware/error.js";
 import ErrorHandler, { fetchCountryByCity } from "../utils/utitlity.js";
 import axios from 'axios';
+import csv from 'csvtojson';
 
 const FASTAPI_URL = process.env.FASTAPI_URL || "http://127.0.0.1:8000/jobs/"; 
 
@@ -51,6 +52,80 @@ export const addJob = TryCatch(async (req, res, next) => {
 
   return res.status(201).json({joblist: joblist, success:true,message:"Added job successfully"});
 });
+
+// add from csv file
+export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
+  // Check if file exists
+  if (!req.file) {
+    return next(new ErrorHandler('No file uploaded', 400));
+  }
+
+  try {
+    // Convert CSV to JSON
+    const jsonArray = await csv().fromString(req.file.buffer.toString());
+
+    // Validate CSV structure
+    const requiredFields = ['title', 'location', 'company', 'description'];
+    const missingFields = requiredFields.filter(field => 
+      !jsonArray.every(row => row.hasOwnProperty(field) && row[field])
+    );
+
+    if (missingFields.length > 0) {
+      return next(new ErrorHandler(`Missing required fields: ${missingFields.join(', ')}`, 400));
+    }
+
+    // Prepare jobs for bulk insert with deduplication
+    const jobsToInsert = [];
+    const duplicateJobs = [];
+
+    for (const job of jsonArray) {
+      // Normalize job data
+      const normalizedJob = {
+        title: job.title.trim(),
+        location: job.location.trim(),
+        company: job.company.trim(),
+        description: job.description.trim(),
+        experienceLevel: job.experienceLevel || 'Entry Level',
+        datePosted: job.datePosted ? new Date(job.datePosted) : new Date(),
+        url: job.url || ''
+      };
+
+      // Check for existing job
+      const existingJob = await Joblist.findOne({
+        title: normalizedJob.title,
+        location: normalizedJob.location,
+        company: normalizedJob.company
+      });
+
+      if (!existingJob) {
+        jobsToInsert.push(normalizedJob);
+      } else {
+        duplicateJobs.push(normalizedJob);
+      }
+    }
+
+    // Bulk insert non-duplicate jobs
+    let insertedCount = 0;
+    if (jobsToInsert.length > 0) {
+      const result = await Joblist.insertMany(jobsToInsert, { ordered: false });
+      insertedCount = result.length;
+    }
+
+    // Respond with import statistics
+    res.status(200).json({
+      success: true,
+      message: 'CSV Import Completed',
+      totalRecords: jsonArray.length,
+      insertedRecords: insertedCount,
+      duplicateRecords: duplicateJobs.length,
+      duplicateJobs: duplicateJobs
+    });
+
+  } catch (error) {
+    return next(new ErrorHandler(`CSV Import Error: ${error.message}`, 500));
+  }
+});
+
 
 export const scrapJob = TryCatch(async (req, res, next) => {
   const { title, location, hours, include_description = true, max_result_wanted,country_code } = req.body;

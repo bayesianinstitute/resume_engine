@@ -11,7 +11,7 @@ from jobspy import scrape_jobs
 from app.model.job import S3UploadResponseModel,JobSearchResponseModel
 from app.utils.utils import generate_file_name,build_search_query
 from app.config.config import s3_manager
-from app.db.data import read_cities_from_csv
+from app.db.data import read_cities_from_csv,get_role
 
 # Set up logging with loguru
 log_dir = "logs"
@@ -83,13 +83,7 @@ def scheduled_job():
         print("No cities found to scrape jobs for.")
         return
 
-    DATA_ROLES = [
-        "data scientist",
-        # "data analyst",
-        # "machine learning engineer",
-        # "data engineer",
-        # "AI researcher"
-    ]
+    DATA_ROLES = get_role()
     
     # For each city and role, scrape jobs
     for city in cities:

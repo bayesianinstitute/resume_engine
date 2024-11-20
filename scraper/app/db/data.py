@@ -27,3 +27,11 @@ def read_cities_from_csv(file_path="app/db/cities.csv"):
         return []
 
 
+def get_role()->list[str]:
+    return [
+        "data scientist",
+        "data analyst",
+        "machine learning engineer",
+        "data engineer",
+        "AI researcher"
+    ]
