@@ -108,22 +108,30 @@ const deleteFromS3 = async (s3Url) => {
 
 
 // Function to download a file from S3 and save it locally
-const downloadFileFromS3 = async ( s3Url,localFileName) => {
+
+
+const downloadFileFromS3 = async (s3Url, localFileName) => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  const localFilePath = path.join(__dirname, "../uploads", localFileName);
-  const s3Key = s3Url.split('.com/')[1]; // Assumes URL format: https://<bucket-name>.s3.<region>.amazonaws.com/<key>
-
-
-  const params = {
-    Bucket: process.env.S3_BUCKET_NAME,
-    Key: s3Key,
-  };
-
   try {
+
+    // Ensure the URL is decoded
+    const decodedUrl = decodeURIComponent(s3Url);
+
+    // Extract the S3 key from the URL (after the .com/)
+    const s3Key = decodedUrl.split('.com/')[1];
+
+    const localFilePath = path.join(__dirname, "../uploads", localFileName);
+
+    const params = {
+      Bucket: process.env.S3_BUCKET_NAME, // Ensure this is set in your environment variables
+      Key: s3Key,
+    };
+
     const fileStream = fs.createWriteStream(localFilePath);
 
+    // Create a read stream from S3
     const s3Stream = s3.getObject(params).createReadStream();
 
     s3Stream.on("error", (err) => {
@@ -135,7 +143,7 @@ const downloadFileFromS3 = async ( s3Url,localFileName) => {
 
     return new Promise((resolve, reject) => {
       fileStream.on("finish", () => {
-        // console.log(`File downloaded successfully to ${localFilePath}`);
+        console.log(`File downloaded successfully to ${localFilePath}`);
         resolve(localFilePath);
       });
 
@@ -144,11 +152,13 @@ const downloadFileFromS3 = async ( s3Url,localFileName) => {
         reject(new Error("Failed to save file locally."));
       });
     });
+
   } catch (error) {
-    console.error("Error downloading file from S3:", error);
-    throw error;
+    console.error("Error occurred in downloadFileFromS3:", error.message || error);
+    throw error; // Re-throw the error so the caller can handle it
   }
 };
+
 
 
 
