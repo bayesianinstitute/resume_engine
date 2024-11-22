@@ -65,7 +65,7 @@ export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
     const jsonArray = await csv().fromString(req.file.buffer.toString());
 
     // Validate CSV structure
-    const requiredFields = ['title', 'location', 'company', 'description'];
+    const requiredFields = ['title', 'location', 'company', 'description','job_url'];
     const missingFields = requiredFields.filter(field => 
       !jsonArray.every(row => row.hasOwnProperty(field) && row[field])
     );
@@ -87,7 +87,7 @@ export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
         description: job.description.trim(),
         experienceLevel: job.experienceLevel || 'Entry Level',
         datePosted: job.datePosted ? new Date(job.datePosted) : new Date(),
-        url: job.url || ''
+        url: job_url
       };
 
       // Check for existing job

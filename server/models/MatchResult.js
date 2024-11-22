@@ -36,6 +36,8 @@ const matchResultSchema = new mongoose.Schema(
             },
             jobTitle: { type: String, required: true },
             jobCompany: { type: String, required: true },
+            jobUrl:{ type: String },
+
             matchResult: { type: String, required: true },
             evaluationResponse: { type: EvaluationDetailsSchema, required: true },
           },

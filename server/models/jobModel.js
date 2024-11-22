@@ -29,7 +29,7 @@ const jobSchema = new mongoose.Schema({
   },
   url: {
     type: String,
-    required: false // Make url optional
+    required: true // Make url optional
   }
 });
 

@@ -210,6 +210,8 @@ export const matcher = TryCatch(async (req, res, next) => {
           jobId: jobData._id,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
+          jobUrl:jobData.url,
+
           matchResult: resultMessage,
           evaluationResponse: {
             scores,
@@ -375,9 +377,12 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
               resumeName,
               jobTitle: jobData.title,
               jobCompany: jobData.company,
+              jobUrl:jobData.url,
               evaluationResponse:
                 existingMatch.resumes.jobs?.[0]?.evaluationResponse ,
+              
             });
+
             continue;
           }
 
@@ -400,6 +405,8 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
             resumeName,
             jobTitle: jobData.title,
             jobCompany: jobData.company,
+            jobUrl:jobData.url,
+
             matchResult:
               compositeScore >= fitThreshold
                 ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
@@ -430,9 +437,12 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
       "Resume Name": jobResult.resumeName,
       "Job Title": jobResult.jobTitle,
       "Company Name": jobResult.jobCompany,
+      "jobUrl":jobResult.jobUrl,
+      
       Isfit: jobResult.evaluationResponse.isfit,
       "Match Result": jobResult.matchResult,
       "Composite Score": jobResult.evaluationResponse.compositeScore,
+
       Relevance: jobResult.evaluationResponse.scores.relevance,
       Skills: jobResult.evaluationResponse.scores.skills,
       Experience: jobResult.evaluationResponse.scores.experience,
