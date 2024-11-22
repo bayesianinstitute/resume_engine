@@ -32,4 +32,24 @@ export const fetchCountryByCity = async (city) => {
   }
 };
 
-await fetchCountryByCity("Los Angeles");
+export function determineStartDate(dateRange) {
+  const currentDate = new Date();
+  let startDate;
+
+  switch (dateRange.toString()) {
+    case "last_week":
+      startDate = new Date(currentDate); // Create a copy to avoid modifying currentDate
+      startDate.setDate(currentDate.getDate() - 7);
+      break;
+    case "last_month":
+      startDate = new Date(currentDate); // Create a copy
+      startDate.setMonth(currentDate.getMonth() - 1);
+      break;
+    default: // "day" or any other invalid input
+      startDate = new Date(currentDate); // Create a copy
+      startDate.setDate(currentDate.getDate() - 1);
+      break;
+  }
+
+  return startDate;
+}

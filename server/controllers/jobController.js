@@ -94,7 +94,8 @@ export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
       const existingJob = await Joblist.findOne({
         title: normalizedJob.title,
         location: normalizedJob.location,
-        company: normalizedJob.company
+        company: normalizedJob.company,
+        url: normalizedJob.url
       });
 
       if (!existingJob) {

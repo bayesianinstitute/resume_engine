@@ -9,13 +9,16 @@ load_dotenv()
 ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 REGION = os.getenv("AWS_REGION")
-BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME") 
+PUBLIC_GEOAPIFY_API_KEY = os.getenv("PUBLIC_GEOAPIFY_API_KEY")
 
-if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME]):
+
+if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME,PUBLIC_GEOAPIFY_API_KEY]):
     logger.error("Environment variables must be specified in the environment")
     raise ValueError("AWS environment variables are not set properly.")
 
- 
+
+
 
 # S3 Manager instance
 s3_manager = S3Manager(

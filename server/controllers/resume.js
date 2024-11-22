@@ -12,7 +12,7 @@ import { TryCatch } from "../middleware/error.js";
 import { Job } from "../models/jobTracker.js";
 import { MatchResult } from "../models/MatchResult.js";
 import { io } from "../socket.js";
-import ErrorHandler from "../utils/utitlity.js";
+import ErrorHandler, { determineStartDate } from "../utils/utitlity.js";
 import axios from "axios";
 import mongoose from "mongoose";
 import { User } from "../models/user.js";
@@ -28,7 +28,7 @@ import {
   downloadFileFromS3,
 } from "../utils/s3Upload.js";
 
-import { promisify } from 'util';
+import { promisify } from "util";
 
 const writeFileAsync = promisify(fs.writeFile);
 
@@ -284,13 +284,15 @@ export const matcher = TryCatch(async (req, res, next) => {
   }
 });
 
+
 export const matcherEnterprise = TryCatch(async (req, res, next) => {
   const {
     email,
     resumeNames = [],
-    jobIds = [],
+    jobTitles = [],
     selectallJob = false,
     selectallResume = false,
+    dateRange = "last_day", // Default to "day"
   } = req.body;
 
   if (!email) {
@@ -303,11 +305,24 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("User not found", 404));
   }
 
-  // Determine the jobs to be processed
-  const jobDataArray = selectallJob
-    ? await Joblist.find()
-    : await Joblist.find({ _id: { $in: jobIds } });
+  const filterDate = determineStartDate(dateRange);
 
+  // // Title filter
+  // if (title) filter.title = new RegExp(title, "i");
+
+  // Job filtering with partial match and title constraints
+
+  const jobFilter = selectallJob
+    ? { datePosted: { $gte: filterDate } }
+    : { datePosted: { $gte: filterDate } };
+
+  if (jobTitles.length > 0) {
+    jobFilter.title = {
+      $in: jobTitles.map((title) => new RegExp(title, "i")), // Partial match for multiple job titles
+    };
+  }
+
+  const jobDataArray = await Joblist.find(jobFilter);
   if (!jobDataArray || jobDataArray.length === 0) {
     return next(new ErrorHandler("No jobs found.", 404));
   }
@@ -350,17 +365,18 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
         for (const jobData of jobDataArray) {
           const existingMatch = await MatchResult.findOne({
             userId,
-            "resumes.jobs.jobId": jobData._id,
+            "resumes.jobs.jobTitle": jobData.title,
             "resumes.resumeName": resumeName,
           });
-
+          
           if (existingMatch) {
+            console.log("existingMatch.resumes",existingMatch); 
             results.push({
               resumeName,
               jobTitle: jobData.title,
               jobCompany: jobData.company,
               evaluationResponse:
-                existingMatch.resumes.jobs[0].evaluationResponse,
+                existingMatch.resumes.jobs?.[0]?.evaluationResponse ,
             });
             continue;
           }
@@ -382,7 +398,6 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
 
           const newJobResult = {
             resumeName,
-            jobId: jobData._id,
             jobTitle: jobData.title,
             jobCompany: jobData.company,
             matchResult:
@@ -400,7 +415,7 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
           results.push(newJobResult);
         }
 
-        // Cleanup: Remove downloaded file
+        // Cleanup: Remove downloaded file if necessary
         // if (resumePath.startsWith("https://")) {
         //   fs.unlinkSync(localFilePath);
         // }
@@ -426,24 +441,19 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
     }));
 
     const csvContent = convertToCSV(csvData);
-    // Define paths
     const rootDir = path.resolve(__dirname, "../uploads/");
     const targetDir = path.join(rootDir, "match_results");
     const fileName = `match_results_${Date.now()}.csv`;
     const filePath = path.join(targetDir, fileName);
 
-    // Ensure directory exists
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
-    // Write CSV locally
     await writeFileAsync(filePath, csvContent, "utf8");
     console.log(`File saved successfully at ${filePath}`);
 
-    // Upload CSV to S3
     const s3FileUrl = await uploadCSVToS3(filePath, fileName);
-    // const s3FileUrl = await uploadCSVToS3(filePath, fileName);
 
     return res.json({ message: "Match result", success: true, s3FileUrl });
   } catch (error) {
@@ -865,4 +875,3 @@ export const getAllJobIds = TryCatch(async (req, res, next) => {
     next(new ErrorHandler("An error occurred while fetching job details", 500));
   }
 });
-
