@@ -53,7 +53,7 @@ export const addJob = TryCatch(async (req, res, next) => {
   return res.status(201).json({joblist: joblist, success:true,message:"Added job successfully"});
 });
 
-// add from csv file
+// Add from CSV file
 export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
   // Check if file exists
   if (!req.file) {
@@ -63,42 +63,40 @@ export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
   try {
     // Convert CSV to JSON
     const jsonArray = await csv().fromString(req.file.buffer.toString());
+    console.log(jsonArray);
 
     // Validate CSV structure
-    const requiredFields = ['title', 'location', 'company', 'description','job_url'];
-    const missingFields = requiredFields.filter(field => 
-      !jsonArray.every(row => row.hasOwnProperty(field) && row[field])
+    const requiredFields = ['title', 'location', 'company', 'description', 'job_url'];
+    const missingFields = requiredFields.filter(field =>
+      !jsonArray.every(row => row.hasOwnProperty(field) && row[field]?.trim())
     );
 
     if (missingFields.length > 0) {
       return next(new ErrorHandler(`Missing required fields: ${missingFields.join(', ')}`, 400));
     }
 
-    // Prepare jobs for bulk insert with deduplication
+    // Normalize and prepare jobs for bulk insert
     const jobsToInsert = [];
     const duplicateJobs = [];
+    const existingJobs = await Joblist.find({
+      url: { $in: jsonArray.map(job => job.job_url.trim()) }, // Optimize duplicate check
+    });
+
+    const existingUrls = new Set(existingJobs.map(job => job.url));
 
     for (const job of jsonArray) {
-      // Normalize job data
       const normalizedJob = {
         title: job.title.trim(),
         location: job.location.trim(),
         company: job.company.trim(),
         description: job.description.trim(),
-        experienceLevel: job.experienceLevel || 'Entry Level',
-        datePosted: job.datePosted ? new Date(job.datePosted) : new Date(),
-        url: job_url
+        experienceLevel: job.job_level?.trim() || 'Entry Level',
+        datePosted: job.date_posted ? new Date(job.date_posted) : new Date(),
+        url: job.job_url.trim(),
       };
 
-      // Check for existing job
-      const existingJob = await Joblist.findOne({
-        title: normalizedJob.title,
-        location: normalizedJob.location,
-        company: normalizedJob.company,
-        url: normalizedJob.url
-      });
-
-      if (!existingJob) {
+      // Check if job URL already exists
+      if (!existingUrls.has(normalizedJob.url)) {
         jobsToInsert.push(normalizedJob);
       } else {
         duplicateJobs.push(normalizedJob);
@@ -119,13 +117,14 @@ export const uploadJobsFromCSV = TryCatch(async (req, res, next) => {
       totalRecords: jsonArray.length,
       insertedRecords: insertedCount,
       duplicateRecords: duplicateJobs.length,
-      duplicateJobs: duplicateJobs
+      duplicateJobs,
     });
 
   } catch (error) {
     return next(new ErrorHandler(`CSV Import Error: ${error.message}`, 500));
   }
 });
+
 
 
 export const scrapJob = TryCatch(async (req, res, next) => {
