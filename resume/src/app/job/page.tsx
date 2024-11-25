@@ -95,6 +95,7 @@ export default function JobTabs() {
       { field: description, name: "job description" },
       { field: company, name: "company name" },
       { field: datePosted, name: "date posted" },
+      { field: url, name: "URL job posted" },
     ];
 
     for (const { field, name } of requiredFields) {
@@ -237,7 +238,7 @@ export default function JobTabs() {
                 <Label htmlFor="url">URL</Label>
                 <Input
                   id="url"
-                  placeholder="Enter job posting URL (optional)"
+                  placeholder="Enter job posting URL"
                   value={formData.url}
                   onChange={handleChange}
                 />
