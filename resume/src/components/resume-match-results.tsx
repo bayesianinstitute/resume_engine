@@ -45,7 +45,7 @@ export function ResumeMatchResults() {
   const [isLoading, setIsLoading] = useState(false); // New state for loading indicator
 
   const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:5000";
+    process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:5001";
 
   useEffect(() => {
     // Sync local results with Redux store

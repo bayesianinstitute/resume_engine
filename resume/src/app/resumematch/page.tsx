@@ -228,7 +228,7 @@ export default function ResumeMatcher() {
   // WebSocket setup for real-time updates
   useEffect(() => {
     const socket = io(
-      process.env.NEXT_PUBLIC_BASE_WS_URL || "http://localhost:5000"
+      process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001"
     );
 
     socket.on("progress", (data: MatchResultResponse) => {
