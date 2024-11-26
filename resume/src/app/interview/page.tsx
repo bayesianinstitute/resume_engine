@@ -17,7 +17,11 @@ import {
   setPrepResources,
 } from "@/lib/store/features/job/jobSlice";
 import { AppDispatch, RootState } from "@/lib/store/store";
-import { InterviewQuestion, preparationAPIResponse, PrepResource } from "@/types/interview";
+import {
+  InterviewQuestion,
+  preparationAPIResponse,
+  PrepResource,
+} from "@/types/interview";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, Download, List, MessageSquare } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -30,16 +34,19 @@ import {
 } from "@/lib/fileparse";
 import { fetchJobs, setIsSearch } from "@/lib/store/features/job/jobSearch";
 import { toast } from "react-toastify";
+import Expander from "@/components/ui/expander";
 
 export default function InterviewPreparation() {
   const dispatch = useDispatch<AppDispatch>();
   const { jobDescription, prepResources, loading } = useSelector(
     (state: RootState) => state.jobDescription
   );
-  const { jobs, totalJobs,isSearch } = useSelector((state: RootState) => state.jobs);
+  const { jobs, totalJobs, isSearch } = useSelector(
+    (state: RootState) => state.jobs
+  );
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const cardRef = useRef<HTMLDivElement | null>(null); 
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const loadMoreJobs = useCallback(() => {
     if (!loading && jobs.length < totalJobs) {
@@ -80,12 +87,10 @@ export default function InterviewPreparation() {
           body: JSON.stringify({ jobDescription }),
         }
       );
-      const responseData: preparationAPIResponse=await response.json();
+      const responseData: preparationAPIResponse = await response.json();
       if (responseData.success) {
-        const parsedData:InterviewQuestion = JSON.parse(responseData.data);
-        const prepResources = parsePreparationResources(
-          parsedData
-        );
+        const parsedData: InterviewQuestion = JSON.parse(responseData.data);
+        const prepResources = parsePreparationResources(parsedData);
 
         dispatch(setPrepResources(prepResources));
         toast.success(responseData.message);
@@ -112,7 +117,7 @@ export default function InterviewPreparation() {
       dispatch(fetchJobs({ page: 1, limit: 10 }));
       dispatch(setIsSearch(false));
     }
-  }, [dispatch, jobs.length,isSearch]);
+  }, [dispatch, jobs.length, isSearch]);
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -126,14 +131,17 @@ export default function InterviewPreparation() {
           description
         </p>
         <div className="max-w-6xl mx-auto space-y-8">
-          <JobOpportunities
-            jobs={jobs}
-            selectedJob={selectedJob}
-            handleJobSelect={handleJobSelect}
-            totalJobs={totalJobs}
-            loading={loading}
-            onLoadMore={loadMoreJobs}
-          />
+          <Expander title="View Job Opportunities">
+            <JobOpportunities
+              jobs={jobs}
+              selectedJob={selectedJob}
+              handleJobSelect={handleJobSelect}
+              totalJobs={totalJobs}
+              loading={loading}
+              onLoadMore={loadMoreJobs}
+            />
+          </Expander>
+
           <JobDescriptionForm
             jobDescription={jobDescription}
             handleSubmit={handleSubmit}
@@ -148,7 +156,7 @@ export default function InterviewPreparation() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <Card className="shadow-lg" >
+                  <Card className="shadow-lg">
                     <CardHeader className="flex justify-between items-center">
                       <div>
                         <CardTitle>Interview Preparation Resources</CardTitle>
