@@ -12,7 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { selectMatchResults, setMatchResults } from "@/lib/store/features/resume/matchSlice";
+import {
+  selectMatchResults,
+  setMatchResults,
+} from "@/lib/store/features/resume/matchSlice";
 import { MatchResult, MatchResultResponse } from "@/types/matcher";
 import { Label } from "@radix-ui/react-label";
 import {
@@ -25,14 +28,27 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { jwtDecode } from "jwt-decode";
-import { Download, RefreshCcw, Search } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  Download,
+  FileTextIcon,
+  InfoIcon,
+  Link2Icon,
+  RefreshCcw,
+  Search,
+  XCircleIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem } from "./ui/select";
 
-import { AppDispatch } from "@/lib/store/store";
+import { AppDispatch, RootState } from "@/lib/store/store";
 import { useDispatch } from "react-redux";
+import { setJobDescription } from "@/lib/store/features/job/jobSlice";
+import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { toast } from "react-toastify";
 
 export function ResumeMatchResults() {
   const dispatch = useDispatch<AppDispatch>();
@@ -43,6 +59,8 @@ export function ResumeMatchResults() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [filterByFit, setFilterByFit] = useState<string>(""); // New filter state
   const [isLoading, setIsLoading] = useState(false); // New state for loading indicator
+  const { jobs } = useSelector((state: RootState) => state.jobs);
+  const router = useRouter();
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:5001";
@@ -51,6 +69,37 @@ export function ResumeMatchResults() {
     // Sync local results with Redux store
     setResults(matchResults);
   }, [matchResults]);
+
+  // Add this function to handle job description click
+  const handleJobDescription = useCallback(
+    (id: string) => {
+      const job = jobs.find((job) => job._id === id); // Assuming `jobs` is an array with job objects
+      if (!job) {
+        console.error(`Job with ID ${id} not found`);
+        return;
+      }
+      dispatch(setJobDescription(job.description)); // Set job description in Redux
+      router.push("/interview"); // Redirect to interview preparation page
+    },
+    [dispatch, jobs, router]
+  );
+
+  const handleJobURL = useCallback(
+    (id: string) => {
+      const job = jobs.find((job) => job._id === id); // Assuming `jobs` is an array with job objects
+      if (!job) {
+        console.error(`Job with ID ${id} not found`);
+        return;
+      }
+      if (!job.url) {
+        console.log(`Job with No URL ${job._id}`);
+        toast.success(`No URL is Found for job `)
+        return;
+      }
+      window.open(job.url, "_blank"); // Open job URL in a new tab
+    },
+    [jobs]
+  );
 
   const getToken = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -124,18 +173,33 @@ export function ResumeMatchResults() {
     () => [
       {
         accessorKey: "resumeName",
-        header: "Resume Names",
+        header: "Resume",
         cell: ({ row }) => (
-          <div className="font-medium">{row.getValue("resumeName")}</div>
+          <div className="flex items-center space-x-3">
+            <FileTextIcon className="text-blue-500 w-5 h-5" />
+            <span className="font-medium text-gray-800">
+              {row.getValue("resumeName")}
+            </span>
+          </div>
         ),
       },
       {
         accessorKey: "jobTitle",
         header: "Job Title",
+        cell: ({ row }) => (
+          <div className="text-sm text-gray-700 font-semibold">
+            {row.getValue("jobTitle")}
+          </div>
+        ),
       },
       {
         accessorKey: "jobCompany",
         header: "Company",
+        cell: ({ row }) => (
+          <div className="text-sm text-gray-600">
+            {row.getValue("jobCompany")}
+          </div>
+        ),
       },
       {
         accessorKey: "matchResult",
@@ -145,10 +209,20 @@ export function ResumeMatchResults() {
           return (
             <Badge
               variant={isGoodFit ? "secondary" : "destructive"}
-              className={
-                isGoodFit ? "bg-green-500 text-white" : "w-24 justify-center"
-              }
+              className={`
+                ${
+                  isGoodFit
+                    ? "bg-green-100 text-green-800 border-green-300"
+                    : "bg-red-100 text-red-800 border-red-300"
+                }
+                flex items-center justify-center space-x-2 px-3 py-1 rounded-full
+              `}
             >
+              {isGoodFit ? (
+                <CheckCircle2Icon className="w-4 h-4 mr-1" />
+              ) : (
+                <XCircleIcon className="w-4 h-4 mr-1" />
+              )}
               {isGoodFit ? "Good Fit" : "Not a Fit"}
             </Badge>
           );
@@ -156,32 +230,96 @@ export function ResumeMatchResults() {
       },
       {
         accessorKey: "compositeScore",
-        header: "Score(%)",
+        header: "Match Score",
         cell: ({ row }) => {
           const compositeScore =
             row.original.evaluationResponse.compositeScore || 0;
           return (
-            <div className="flex items-center space-x-2">
-              <Progress value={compositeScore} className="w-full" />
-              <span className="text-sm font-medium">{compositeScore}%</span>
+            <div className="flex items-center space-x-3">
+              <Progress
+                value={compositeScore}
+                className={cn(
+                  "h-2",
+                  compositeScore > 70
+                    ? "bg-green-100"
+                    : compositeScore > 40
+                    ? "bg-yellow-100"
+                    : "bg-red-100"
+                )}
+              />
+              <span
+                className={`
+                text-sm font-medium 
+                ${
+                  compositeScore > 70
+                    ? "text-green-600"
+                    : compositeScore > 40
+                    ? "text-yellow-600"
+                    : "text-red-600"
+                }
+              `}
+              >
+                {compositeScore}%
+              </span>
             </div>
           );
         },
       },
       {
-        id: "actions",
+        id: "details",
+        header: "Details",
         cell: ({ row }) => {
           const index = row.index;
           return (
-            <Button variant="ghost" size="sm" onClick={() => toggleRow(index)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-blue-600 hover:bg-blue-50"
+              onClick={() => toggleRow(index)}
+            >
+              <InfoIcon className="w-4 h-4 mr-2" />
               {expandedRows.includes(index) ? "Hide" : "Show"}
             </Button>
           );
         },
       },
-      
+      {
+        id: "preparation",
+        header: "Preparation",
+        cell: ({ row }) => {
+          const jobId = row.original.jobId;
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-purple-600 hover:bg-purple-50"
+              onClick={() => handleJobDescription(jobId)}
+            >
+              Prep Notes
+            </Button>
+          );
+        },
+      },
+      {
+        id: "View_Details",
+        header: "Job URL",
+        cell: ({ row }) => {
+          const jobId = row.original.jobId;
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-purple-600 hover:bg-purple-50"
+              onClick={() => handleJobURL(jobId)}
+            >
+              <Link2Icon />
+              URL
+            </Button>
+          );
+        },
+      },
     ],
-    [expandedRows]
+    [expandedRows, handleJobDescription, handleJobURL]
   );
 
   const table = useReactTable({
@@ -203,13 +341,13 @@ export function ResumeMatchResults() {
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
     );
   };
-  
 
   const downloadCSV = () => {
     const headers = [
       "Resume Name",
       "Job Title",
       "Company Name",
+      "job_url",
       "Isfit",
       "Match Result",
       "compositeScore",
@@ -232,11 +370,15 @@ export function ResumeMatchResults() {
         experience: 0,
         presentation: 0,
       };
+      // Find the corresponding job to get the URL
+      const job = jobs.find((job) => job._id === result.jobId);
+      const jobUrl = job?.url || ""; // Get job URL or empty string
 
       const csvRow = [
         result.resumeName || "",
         result.jobTitle || "",
         result.jobCompany || "",
+        jobUrl,  // Add job URL to the CSV row
         evaluation.isfit || false,
         cleanMatchResult ? cleanMatchResult.replace(/,/g, ";") : "",
         evaluation.compositeScore || "",
