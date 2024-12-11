@@ -1,6 +1,11 @@
 import os
 import csv
 from loguru import logger
+import pandas as pd
+from io import StringIO
+import requests
+from app.config.config import ENTERPRISE_API_KEY,ENTERPRISE_URL
+
 def read_cities_from_csv(file_path="app/db/cities.csv"):
     
     cities = []
@@ -35,3 +40,26 @@ def get_role()->list[str]:
         "data engineer",
         "AI researcher"
     ]
+    
+
+
+
+def upload_to_db(csv_data: str) -> bool:
+    """Upload the CSV data to the database using the specified API."""
+    try:
+        upload_url = ENTERPRISE_URL
+        headers = {"API-Key": ENTERPRISE_API_KEY}
+        files = {'jobsFile': ('jobs.csv', StringIO(csv_data), 'text/csv')}
+
+        # Make the API request to upload the jobs CSV
+        response = requests.post(upload_url, headers=headers, files=files)
+
+        if response.status_code == 200:
+            logger.info("Jobs successfully uploaded to the database.")
+            return True
+        else:
+            logger.error(f"Failed to upload jobs to the database: {response.text}")
+            return False
+    except Exception as e:
+        logger.error(f"Error uploading jobs to the database: {e}")
+        return False

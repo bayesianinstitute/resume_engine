@@ -13,9 +13,14 @@ BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 PUBLIC_GEOAPIFY_API_KEY = os.getenv("PUBLIC_GEOAPIFY_API_KEY")
 
 
-if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME,PUBLIC_GEOAPIFY_API_KEY]):
-    logger.error("Environment variables must be specified in the environment")
-    raise ValueError("AWS environment variables are not set properly.")
+ENTERPRISE_URL = os.getenv("ENTERPRISE_URL")
+ENTERPRISE_API_KEY = os.getenv("ENTERPRISE_API_KE")
+
+
+if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME,PUBLIC_GEOAPIFY_API_KEY,ENTERPRISE_URL,ENTERPRISE_API_KEY]):
+    missing_keys = [key for key, value in locals().items() if value is None]
+    logger.error(f"Environment variables must be specified in the environment. Missing keys: {missing_keys}")
+    raise ValueError(f"Environment variables must be specified in the environment. Missing keys: {missing_keys}")
 
 
 

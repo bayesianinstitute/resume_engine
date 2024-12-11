@@ -11,7 +11,7 @@ from jobspy import scrape_jobs
 from app.model.job import S3UploadResponseModel,JobSearchResponseModel
 from app.utils.utils import generate_file_name,build_search_query,fetch_country_by_city
 from app.config.config import s3_manager
-from app.db.data import read_cities_from_csv,get_role
+from app.db.data import read_cities_from_csv,get_role,upload_to_db
 
 # Set up logging with loguru
 log_dir = "logs"
@@ -65,6 +65,12 @@ def scrape_and_upload_jobs(city: str,job_role="software engineer",results_wanted
         jobs["date_posted"] = jobs["date_posted"].apply(lambda x: str(x) if not pd.isna(x) else "")
         filtered_jobs = jobs[["title", "location", "job_level", "date_posted", "description", "job_url", "company"]]
         
+        csv_data = filtered_jobs.to_csv(index=False)
+
+        # Upload to the database
+        
+        if not upload_to_db(csv_data):
+            logger.error("Failed to upload jobs to the database. Exiting process.")
 
         presigned_url = s3_manager.upload_csv(filtered_jobs, file_name)
 
