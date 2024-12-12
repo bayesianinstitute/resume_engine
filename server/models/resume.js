@@ -12,8 +12,8 @@ const resumeSchema = new mongoose.Schema({
         type: String, // File Path
         required: true,
       },
-      filename:{
-        type:String, // file name
+      filename: {
+        type: String, // file name
         required: true,
         unique: true,
       },
@@ -44,3 +44,46 @@ const resumeSchema = new mongoose.Schema({
 });
 
 export const Resume = mongoose.model('Resume', resumeSchema);
+
+
+
+
+const automationSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    email: {  // Add email field to the schema
+      type: String,
+      required: true,
+    },
+    automationData: [
+      {
+        resumeName: {
+          type: String,
+          required: true,
+        },
+        jobTitles: [
+          {
+            title: {
+              type: String,
+              required: true,
+            },
+            addedAt: {
+              type: Date,
+              default: Date.now,
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export const Automation = mongoose.model('Automation', automationSchema);
+

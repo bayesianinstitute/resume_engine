@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { matcher,getResumeMatchResults, stats,getResumeAnalysis,getSkillProgresses,getStatusCount,getAllResumes,resumeview, deleteResume, matcherEnterprise } from '../controllers/resume.js';
+import { matcher,getResumeMatchResults, stats,getResumeAnalysis,getSkillProgresses,getStatusCount,getAllResumes,resumeview, deleteResume, matcherEnterprise, handleAutomationData } from '../controllers/resume.js';
 import { getLinkedInJobs } from '../controllers/linkedinController.js';
 import { generatePreparationResources } from '../controllers/interviewController.js';
 import { getJobs, createJob, updateJobStatus,deleteJob } from '../controllers/jobTrackerController.js';
@@ -27,5 +27,11 @@ router.post('/jobtracker',verifyTokenMiddleware, createJob);
 router.patch('/jobtracker/:id',verifyTokenMiddleware, updateJobStatus);
 
 router.delete('/jobtracker/:id',verifyTokenMiddleware, deleteJob);
+
+
+// Add a handle job title
+router.post('/automation', handleAutomationData);
+
+
 
 export default router;

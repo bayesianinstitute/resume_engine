@@ -13,6 +13,7 @@ export interface EvaluationDetails {
 export interface MatchResult {
   resumeEntryId: string;
   resumeName: string;
+  job_url:string
   jobId: string;
   jobTitle: string;
   jobCompany:string;

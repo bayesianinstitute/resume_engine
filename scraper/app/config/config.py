@@ -1,6 +1,7 @@
 from app.utils.s3 import S3Manager
 import os
 from loguru import logger
+from pymongo import MongoClient
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,7 +18,12 @@ ENTERPRISE_URL = os.getenv("ENTERPRISE_URL")
 ENTERPRISE_API_KEY = os.getenv("ENTERPRISE_API_KEY")
 
 
-if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME,PUBLIC_GEOAPIFY_API_KEY,ENTERPRISE_URL,ENTERPRISE_API_KEY]):
+MONGO_URI = os.getenv("MONGODB_URL")
+DATABASE_NAME = "Resume"
+AUTOMATION_COLLECTION = "automations"
+
+
+if not all([ACCESS_KEY, SECRET_KEY, REGION, BUCKET_NAME,PUBLIC_GEOAPIFY_API_KEY,ENTERPRISE_URL,ENTERPRISE_API_KEY,MONGO_URI]):
     missing_keys = [key for key, value in locals().items() if value is None]
     logger.error(f"Environment variables must be specified in the environment. Missing keys: {missing_keys}")
     raise ValueError(f"Environment variables must be specified in the environment. Missing keys: {missing_keys}")
@@ -32,3 +38,6 @@ s3_manager = S3Manager(
     region=REGION,
     bucket_name=BUCKET_NAME,
 )
+
+# Connect to MongoDB
+client = MongoClient(MONGO_URI)

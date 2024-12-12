@@ -43,11 +43,11 @@ import { useSelector } from "react-redux";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem } from "./ui/select";
 
-import { AppDispatch, RootState } from "@/lib/store/store";
-import { useDispatch } from "react-redux";
 import { setJobDescription } from "@/lib/store/features/job/jobSlice";
-import { useRouter } from "next/navigation";
+import { AppDispatch, RootState } from "@/lib/store/store";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { useDispatch } from "react-redux";
 import { toast } from "react-toastify";
 
 export function ResumeMatchResults() {
@@ -85,20 +85,14 @@ export function ResumeMatchResults() {
   );
 
   const handleJobURL = useCallback(
-    (id: string) => {
-      const job = jobs.find((job) => job._id === id); // Assuming `jobs` is an array with job objects
-      if (!job) {
-        console.error(`Job with ID ${id} not found`);
+    (url: string) => {
+      if (!url) {
+        toast.warning("No URL provided");
         return;
       }
-      if (!job.url) {
-        console.log(`Job with No URL ${job._id}`);
-        toast.success(`No URL is Found for job `)
-        return;
-      }
-      window.open(job.url, "_blank"); // Open job URL in a new tab
+      window.open(url, "_blank"); // Open job URL in a new tab
     },
-    [jobs]
+    []
   );
 
   const getToken = useCallback(() => {
@@ -304,13 +298,13 @@ export function ResumeMatchResults() {
         id: "View_Details",
         header: "Job URL",
         cell: ({ row }) => {
-          const jobId = row.original.jobId;
+          const jobURL = row.original.job_url;
           return (
             <Button
               variant="outline"
               size="sm"
               className="text-purple-600 hover:bg-purple-50"
-              onClick={() => handleJobURL(jobId)}
+              onClick={() => handleJobURL(jobURL)}
             >
               <Link2Icon />
               URL
@@ -370,15 +364,13 @@ export function ResumeMatchResults() {
         experience: 0,
         presentation: 0,
       };
-      // Find the corresponding job to get the URL
-      const job = jobs.find((job) => job._id === result.jobId);
-      const jobUrl = job?.url || ""; // Get job URL or empty string
+
 
       const csvRow = [
         result.resumeName || "",
         result.jobTitle || "",
         result.jobCompany || "",
-        jobUrl,  // Add job URL to the CSV row
+        result.job_url || "",  // Add job URL to the CSV row
         evaluation.isfit || false,
         cleanMatchResult ? cleanMatchResult.replace(/,/g, ";") : "",
         evaluation.compositeScore || "",

@@ -1,22 +1,27 @@
-interface UserData{
-    email: string;
-    password: string;
-    name: string;
-    phone: string;
+import { defaultResponse } from "./resume";
+
+export interface UserInfo {
+  email: string;
+  name: string;
+  phone: string;
 }
 
-interface data{
-    token: string,
-    user: UserData,
-}
-export interface loginResponse {
-    success: boolean,
-    message: string,
-    data: data,
+interface UserData extends UserInfo {
+  password: string;
 }
 
-export interface SignupResponse {
-    success: boolean,
-    message: string,
-    data: data,
+interface data {
+  token: string;
+  user: UserData;
+}
+export interface loginResponse extends defaultResponse {
+  data: data;
+}
+
+export interface SignupResponse extends defaultResponse {
+  data: data;
+}
+
+export interface FetchUserInfo extends defaultResponse {
+  data: UserInfo;
 }

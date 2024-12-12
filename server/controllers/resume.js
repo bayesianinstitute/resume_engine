@@ -3,7 +3,7 @@ import fs from "fs";
 import { ObjectId } from "mongodb";
 import path from "path";
 import { Joblist } from "../models/jobModel.js";
-import { Resume } from "../models/resume.js";
+import { Automation, Resume } from "../models/resume.js";
 import { ResumeAnalysis } from "../models/resumeanalysis.js";
 import { SkillProgress } from "../models/skill.js";
 // import { PDFLoader } from 'pdf-loader-library';
@@ -13,8 +13,7 @@ import { Job } from "../models/jobTracker.js";
 import { MatchResult } from "../models/MatchResult.js";
 import { io } from "../socket.js";
 import ErrorHandler, { determineStartDate } from "../utils/utitlity.js";
-import axios from "axios";
-import mongoose from "mongoose";
+
 import { User } from "../models/user.js";
 import {
   getLLMEvaluation,
@@ -53,6 +52,7 @@ const checkAndResetApiRequestCount = () => {
 
 // Helper function to wait until the LLM API is available again
 const waitUntilAvailable = async () => {
+  // Check if the API request count is within the limit (15 requests per minute)
   while (apiRequestCount >= 15) {
     const currentTime = Date.now();
     const timeElapsed = currentTime - lastRequestTimestamp;
@@ -200,6 +200,8 @@ export const matcher = TryCatch(async (req, res, next) => {
 
         apiRequestCount++;
 
+        console.log("apiRequestCount: ", apiRequestCount);
+
         const resultMessage =
           compositeScore >= fitThreshold
             ? `Good fit for job ${jobData.title} with a score of ${compositeScore}%.`
@@ -210,7 +212,7 @@ export const matcher = TryCatch(async (req, res, next) => {
           jobId: jobData._id,
           jobTitle: jobData.title,
           jobCompany: jobData.company,
-          jobUrl:jobData.url,
+          jobUrl: jobData.url,
 
           matchResult: resultMessage,
           evaluationResponse: {
@@ -285,7 +287,6 @@ export const matcher = TryCatch(async (req, res, next) => {
     return next(new ErrorHandler("An error occurred", 500));
   }
 });
-
 
 export const matcherEnterprise = TryCatch(async (req, res, next) => {
   const {
@@ -370,17 +371,16 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
             "resumes.jobs.jobTitle": jobData.title,
             "resumes.resumeName": resumeName,
           });
-          
+
           if (existingMatch) {
-            console.log("existingMatch.resumes",existingMatch); 
+            // console.log("existingMatch.resumes", existingMatch);
             results.push({
               resumeName,
               jobTitle: jobData.title,
               jobCompany: jobData.company,
-              jobUrl:jobData.url,
+              jobUrl: jobData.url,
               evaluationResponse:
-                existingMatch.resumes.jobs?.[0]?.evaluationResponse ,
-              
+                existingMatch.resumes.jobs?.[0]?.evaluationResponse,
             });
 
             continue;
@@ -401,11 +401,15 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
             fitThreshold
           );
 
+          apiRequestCount++;
+
+          console.log("apiRequestCount: ", apiRequestCount);
+
           const newJobResult = {
             resumeName,
             jobTitle: jobData.title,
             jobCompany: jobData.company,
-            jobUrl:jobData.url,
+            jobUrl: jobData.url,
 
             matchResult:
               compositeScore >= fitThreshold
@@ -420,6 +424,21 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
           };
 
           results.push(newJobResult);
+
+          // Save match result to DB
+          await MatchResult.updateOne(
+            { userId },
+            {
+              $push: {
+                resumes: {
+                  resumeName,
+                  jobs: [newJobResult],
+                },
+              },
+              $set: { updatedAt: new Date() },
+            },
+            { upsert: true }
+          );
         }
 
         // Cleanup: Remove downloaded file if necessary
@@ -434,20 +453,19 @@ export const matcherEnterprise = TryCatch(async (req, res, next) => {
     }
 
     const csvData = results.map((jobResult) => ({
-      "Resume Name": jobResult.resumeName,
-      "Job Title": jobResult.jobTitle,
-      "Company Name": jobResult.jobCompany,
-      "jobUrl":jobResult.jobUrl,
-      
-      Isfit: jobResult.evaluationResponse.isfit,
-      "Match Result": jobResult.matchResult,
-      "Composite Score": jobResult.evaluationResponse.compositeScore,
+      "Resume Name": jobResult?.resumeName,
+      "Job Title": jobResult?.jobTitle,
+      "Company Name": jobResult?.jobCompany,
+      jobUrl: jobResult?.jobUrl,
 
-      Relevance: jobResult.evaluationResponse.scores.relevance,
-      Skills: jobResult.evaluationResponse.scores.skills,
-      Experience: jobResult.evaluationResponse.scores.experience,
-      Presentation: jobResult.evaluationResponse.scores.presentation,
-      Recommendation: jobResult.evaluationResponse.recommendation,
+      Isfit: jobResult?.evaluationResponse?.isfit,
+      "Match Result": jobResult?.matchResult,
+      "Composite Score": jobResult?.evaluationResponse?.compositeScore,
+      Relevance: jobResult?.evaluationResponse?.scores?.relevance,
+      Skills: jobResult?.evaluationResponse?.scores?.skills,
+      Experience: jobResult?.evaluationResponse?.scores?.experience,
+      Presentation: jobResult?.evaluationResponse?.scores?.presentation,
+      Recommendation: jobResult?.evaluationResponse?.recommendation,
     }));
 
     const csvContent = convertToCSV(csvData);
@@ -510,6 +528,7 @@ export const getResumeMatchResults = TryCatch(async (req, res, next) => {
               resumeEntryId: resume.resumeEntryId,
               resumeName: resume.resumeName,
               jobTitle: job.jobTitle,
+              job_url:job.jobUrl || "URL",
               jobCompany: job.jobCompany,
               jobId: job.jobId,
               matchResult: job.matchResult,
@@ -883,5 +902,98 @@ export const getAllJobIds = TryCatch(async (req, res, next) => {
   } catch (error) {
     console.error("Error fetching job details:", error);
     next(new ErrorHandler("An error occurred while fetching job details", 500));
+  }
+});
+
+export const handleAutomationData = TryCatch(async (req, res, next) => {
+  const { email, resumeNames, jobTitles, selectallResume = false } = req.body;
+
+  // Validate inputs
+  if (
+    !email ||
+    !Array.isArray(resumeNames) ||
+    resumeNames.length === 0 ||
+    !Array.isArray(jobTitles) ||
+    jobTitles.length === 0
+  ) {
+    return next(
+      new ErrorHandler(
+        "Email, resume names, and at least one job title are required.",
+        400
+      )
+    );
+  }
+
+  try {
+    // Find the user's ID using the email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new ErrorHandler("User not found.", 404));
+    }
+
+    // Determine the resumes to be processed
+    const resumes = selectallResume
+      ? await Resume.find({ userId: user._id })
+      : await Resume.find({
+          userId: user._id,
+          "resumes.filename": { $in: resumeNames },
+        });
+
+    if (!resumes || resumes.length === 0) {
+      return next(
+        new ErrorHandler("No resumes found with the given names.", 404)
+      );
+    }
+
+    // Map resumeNames and jobTitles into the required format
+    const automationData = resumeNames.map((resumeName, index) => ({
+      resumeName,
+      jobTitle: jobTitles[index] || jobTitles[0], // Default to the first job title if titles are fewer
+    }));
+
+    // Check if an Automation document exists for this user
+    let automation = await Automation.findOne({ userId: user._id });
+
+    if (!automation) {
+      // Create a new Automation document if none exists
+      automation = new Automation({
+        userId: user._id,
+        email: email, // Save email along with automation data
+        automationData: [],
+      });
+    }
+
+    // Add or update entries in automationData
+    for (const data of automationData) {
+      const existingEntry = automation.automationData.find(
+        (entry) => entry.resumeName === data.resumeName
+      );
+
+      if (existingEntry) {
+        // Add jobTitle to the existing entry if not already present
+        const titleExists = existingEntry.jobTitles.some(
+          (job) => job.title === data.jobTitle
+        );
+        if (!titleExists) {
+          existingEntry.jobTitles.push({ title: data.jobTitle });
+        }
+      } else {
+        // Add a new entry for the resume
+        automation.automationData.push({
+          resumeName: data.resumeName,
+          jobTitles: [{ title: data.jobTitle }],
+        });
+      }
+    }
+
+    // Save the updated document
+    await automation.save();
+
+    return res.status(200).json({
+      message: "Automation data saved successfully!",
+      success: true,
+    });
+  } catch (error) {
+    return next(error);
   }
 });

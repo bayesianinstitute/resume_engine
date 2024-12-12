@@ -47,7 +47,7 @@ def get_role()->list[str]:
 def upload_to_db(csv_data: str) -> bool:
     """Upload the CSV data to the database using the specified API."""
     try:
-        upload_url = ENTERPRISE_URL
+        upload_url = f"{ENTERPRISE_URL}/job/upload-csv"
         headers = {"API-Key": ENTERPRISE_API_KEY}
         files = {'jobsFile': ('jobs.csv', StringIO(csv_data), 'text/csv')}
 
