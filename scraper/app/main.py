@@ -40,7 +40,7 @@ scheduler = BackgroundScheduler()
 @app.on_event("startup")
 async def startup_event():
     # Schedule the existing job to run every 24 hours
-    # scheduler.add_job(scheduled_job, 'interval', hours=24, next_run_time=datetime.now())
+    scheduler.add_job(scheduled_job, 'interval', hours=24, next_run_time=datetime.now())
 
     # Schedule the new matcher job to run every 24 hours
     scheduler.add_job(scheduled_matcher_job, 'interval', hours=24, next_run_time=datetime.now())
